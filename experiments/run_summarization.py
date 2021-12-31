@@ -28,7 +28,7 @@ from transformers.trainer_utils import get_last_checkpoint
 from transformers.utils import check_min_version
 from transformers.utils.versions import require_version
 
-import l2summ.data.datasets.reform_pubmed
+import lla_summ.data.datasets.reform_pubmed
 
 require_version("datasets>=1.8.0", "To fix: pip install -r examples/pytorch/summarization/requirements.txt")
 
@@ -193,7 +193,7 @@ class DataTrainingArguments:
 
 
 dataset2file = {
-    "reform_pubmed": l2summ.data.datasets.reform_pubmed.__file__,
+    "reform_pubmed": lla_summ.data.datasets.reform_pubmed.__file__,
     "reform_arxiv": None,
     "hal": None,
     "scielo_es": None,
