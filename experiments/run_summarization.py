@@ -34,6 +34,8 @@ require_version("datasets>=1.8.0", "To fix: pip install -r examples/pytorch/summ
 
 logger = logging.getLogger(__name__)
 
+torch.cuda.empty_cache()
+
 try:
     nltk.data.find("tokenizers/punkt")
 except (LookupError, OSError):
@@ -229,6 +231,7 @@ def main():
     transformers.utils.logging.enable_default_handler()
     transformers.utils.logging.enable_explicit_format()
 
+
     # Log on each process the small summary:
     logger.warning(
         f"Process rank: {training_args.local_rank}, device: {training_args.device}, n_gpu: {training_args.n_gpu}"
@@ -355,9 +358,22 @@ def main():
                 ) # Bias is set to False in BigBirdPegasusEncoderAttention.self_attn
         
         return bigbird_model
-                
-    model = load_pegasus_weights_into_bigbird()
+        
+    if training_args.do_train:
+        model = load_pegasus_weights_into_bigbird()
+    else:
+        model = BigBirdPegasusForConditionalGeneration.from_pretrained(
+            model_args.model_name_or_path,
+            from_tf=bool(".ckpt" in model_args.model_name_or_path),
+            cache_dir=model_args.cache_dir,
+            revision=model_args.model_revision,
+            use_auth_token=True if model_args.use_auth_token else None,
+        )
+
+    
     model.resize_token_embeddings(len(tokenizer))
+    model.config.early_stopping = True
+    
 
     if model.config.decoder_start_token_id is None:
         raise ValueError("Make sure that `config.decoder_start_token_id` is correctly defined")
@@ -380,6 +396,12 @@ def main():
                 f" position encodings. Consider either reducing `--max_source_length` to {model.config.max_position_embeddings} or to automatically "
                 "resize the model's position encodings by passing `--resize_position_embeddings`."
             )
+
+
+    logger.info(f"Number of parameters: {sum(p.numel() for p in model.parameters())}")
+
+    if training_args.gradient_checkpointing:
+        model.config.use_cache = False
 
     prefix = data_args.source_prefix if data_args.source_prefix is not None else ""
 
