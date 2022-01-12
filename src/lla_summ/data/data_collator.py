@@ -56,22 +56,28 @@ class DataCollatorForSeq2Seq:
 
         # We have to pad the labels before calling `tokenizer.pad` as this method won't pad them and needs them of the
         # same length to return tensors.
-        max_length = max(len(bbox) for bbox in bboxes)
+        max_source_length = max(len(bbox) for bbox in bboxes)
+        max_target_length = max(len(label) for label in labels)
         if self.pad_to_multiple_of is not None:
-            max_length = (
-                (max_length + self.pad_to_multiple_of - 1)
+            max_source_length = (
+                (max_source_length + self.pad_to_multiple_of - 1)
+                // self.pad_to_multiple_of
+                * self.pad_to_multiple_of
+            )
+            max_target_length = (
+                (max_target_length + self.pad_to_multiple_of - 1)
                 // self.pad_to_multiple_of
                 * self.pad_to_multiple_of
             )
         padding_side = self.tokenizer.padding_side
 
         for feature in features:
-            remainder_bbox = [[0, 0, 0, 0]] * (max_length - len(feature["bbox"]))
+            remainder_bbox = [[0, 0, 0, 0]] * (max_source_length - len(feature["bbox"]))
             feature["bbox"] = (
                 feature["bbox"] + remainder_bbox if padding_side == "right" else remainder_bbox + feature["bbox"]
             )
             if labels is not None:
-                remainder_label = [self.label_pad_token_id] * (max_length - len(feature["labels"]))
+                remainder_label = [self.label_pad_token_id] * (max_target_length - len(feature["labels"]))
                 feature["labels"] = (
                     feature["labels"] + remainder_label if padding_side == "right" else remainder_label + feature["labels"]
                 )
