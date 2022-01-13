@@ -13,8 +13,10 @@ from datasets import load_dataset, load_metric
 import transformers
 from filelock import FileLock
 from transformers import (
+    PegasusConfig,
     BigBirdPegasusConfig, 
     AutoTokenizer,
+    PegasusForConditionalGeneration,
     BigBirdPegasusForConditionalGeneration,
     PegasusModel,
     DataCollatorForSeq2Seq,
@@ -47,12 +49,21 @@ except (LookupError, OSError):
         nltk.download("punkt", quiet=True)
 
 
+MODEL_CLASSES = {
+    "pegasus": (PegasusConfig, PegasusForConditionalGeneration, AutoTokenizer),
+    "bigbird_pegasus": (BigBirdPegasusConfig, BigBirdPegasusForConditionalGeneration, AutoTokenizer),
+}
+
+
 @dataclass
 class ModelArguments:
     """
     Arguments pertaining to which model/config/tokenizer we are going to fine-tune from.
     """
 
+    model_type: str = field(
+        metadata={"help": "Model type selected in the list: " + ", ".join(MODEL_CLASSES.keys())}
+    )
     model_name_or_path: str = field(
         metadata={"help": "Path to pretrained model or model identifier from huggingface.co/models"}
     )
@@ -276,13 +287,17 @@ def main():
         download_mode=data_args.download_mode,
     )
 
-    config = BigBirdPegasusConfig.from_pretrained(
+
+    model_args.model_type = model_args.model_type.lower()
+    config_class, model_class, tokenizer_class = MODEL_CLASSES[model_args.model_type]
+
+    config = config_class.from_pretrained(
         model_args.config_name if model_args.config_name else model_args.model_name_or_path,
         cache_dir=model_args.cache_dir,
         revision=model_args.model_revision,
         use_auth_token=True if model_args.use_auth_token else None,
     )
-    tokenizer = AutoTokenizer.from_pretrained(
+    tokenizer = tokenizer_class.from_pretrained(
         model_args.tokenizer_name if model_args.tokenizer_name else model_args.model_name_or_path,
         cache_dir=model_args.cache_dir,
         use_fast=model_args.use_fast_tokenizer,
@@ -359,17 +374,16 @@ def main():
         
         return bigbird_model
         
-    if training_args.do_train:
+    if model_args.model_type == "bigbird_pegasus" and training_args.do_train:
         model = load_pegasus_weights_into_bigbird()
     else:
-        model = BigBirdPegasusForConditionalGeneration.from_pretrained(
+        model = model_class.from_pretrained(
             model_args.model_name_or_path,
             from_tf=bool(".ckpt" in model_args.model_name_or_path),
             cache_dir=model_args.cache_dir,
             revision=model_args.model_revision,
             use_auth_token=True if model_args.use_auth_token else None,
         )
-
     
     model.resize_token_embeddings(len(tokenizer))
     model.config.early_stopping = True
