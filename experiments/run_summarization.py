@@ -31,6 +31,10 @@ from transformers.utils import check_min_version
 from transformers.utils.versions import require_version
 
 import lla_summ.data.datasets.reform_pubmed
+from lla_summ.modeling.layout_bigbird_pegasus import (
+    LayoutBigBirdPegasusConfig,
+    LayoutBigBirdPegasusForConditionalGeneration
+)
 
 require_version("datasets>=1.8.0", "To fix: pip install -r examples/pytorch/summarization/requirements.txt")
 
@@ -52,6 +56,7 @@ except (LookupError, OSError):
 MODEL_CLASSES = {
     "pegasus": (PegasusConfig, PegasusForConditionalGeneration, AutoTokenizer),
     "bigbird_pegasus": (BigBirdPegasusConfig, BigBirdPegasusForConditionalGeneration, AutoTokenizer),
+    "layout_bigbird_pegasus": (LayoutBigBirdPegasusConfig, LayoutBigBirdPegasusForConditionalGeneration, AutoTokenizer)
 }
 
 
@@ -306,7 +311,7 @@ def main():
     )
 
     def load_pegasus_weights_into_bigbird():
-        bigbird_model = BigBirdPegasusForConditionalGeneration(config=config)
+        bigbird_model = model_class(config=config)
         pegasus_model = PegasusModel.from_pretrained(
             model_args.model_name_or_path,
             from_tf=bool(".ckpt" in model_args.model_name_or_path),
@@ -316,13 +321,27 @@ def main():
         )
 
         with torch.no_grad():
-            bigbird_model.model.shared.load_state_dict(
-                pegasus_model.shared.state_dict()
-            )
+            if model_args.model_type == "bigbird_pegasus":
+                bigbird_model.model.shared.load_state_dict(
+                    pegasus_model.shared.state_dict()
+                )
+                bigbird_model.model.encoder.embed_tokens.load_state_dict(
+                    pegasus_model.encoder.embed_tokens.state_dict()
+                )
+                bigbird_model.model.decoder.embed_tokens.load_state_dict(
+                    pegasus_model.decoder.embed_tokens.state_dict(), 
+                )
+            else:
+                bigbird_model.model.shared.word_embeddings.load_state_dict(
+                    pegasus_model.shared.state_dict()
+                )
+                bigbird_model.model.encoder.embed_tokens.word_embeddings.load_state_dict(
+                    pegasus_model.encoder.embed_tokens.state_dict()
+                )
+                bigbird_model.model.decoder.embed_tokens.word_embeddings.load_state_dict(
+                   pegasus_model.decoder.embed_tokens.state_dict(), 
+                )
 
-            bigbird_model.model.encoder.embed_tokens.load_state_dict(
-                pegasus_model.encoder.embed_tokens.state_dict()
-            )
             bigbird_model.model.encoder.embed_positions.weight[:pegasus_model.config.max_position_embeddings, :].copy_(
                 pegasus_model.encoder.embed_positions.weight
             )
@@ -357,9 +376,6 @@ def main():
                     pegasus_model.encoder.layers[i].final_layer_norm.state_dict()
                 )
                 
-            bigbird_model.model.decoder.embed_tokens.load_state_dict(
-                pegasus_model.decoder.embed_tokens.state_dict()
-            )
             bigbird_model.model.decoder.embed_positions.weight[:pegasus_model.config.max_position_embeddings, :].copy_(
                 pegasus_model.decoder.embed_positions.weight
             )
@@ -374,7 +390,10 @@ def main():
         
         return bigbird_model
         
-    if model_args.model_type == "bigbird_pegasus" and training_args.do_train:
+    if (
+        model_args.model_type in ["bigbird_pegasus", "layout_bigbird_pegasus"]
+        and training_args.do_train
+    ):
         model = load_pegasus_weights_into_bigbird()
     else:
         model = model_class.from_pretrained(
