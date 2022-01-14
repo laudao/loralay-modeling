@@ -321,26 +321,15 @@ def main():
         )
 
         with torch.no_grad():
-            if model_args.model_type == "bigbird_pegasus":
-                bigbird_model.model.shared.load_state_dict(
-                    pegasus_model.shared.state_dict()
-                )
-                bigbird_model.model.encoder.embed_tokens.load_state_dict(
-                    pegasus_model.encoder.embed_tokens.state_dict()
-                )
-                bigbird_model.model.decoder.embed_tokens.load_state_dict(
-                    pegasus_model.decoder.embed_tokens.state_dict(), 
-                )
-            else:
-                bigbird_model.model.shared.word_embeddings.load_state_dict(
-                    pegasus_model.shared.state_dict()
-                )
-                bigbird_model.model.encoder.embed_tokens.word_embeddings.load_state_dict(
-                    pegasus_model.encoder.embed_tokens.state_dict()
-                )
-                bigbird_model.model.decoder.embed_tokens.word_embeddings.load_state_dict(
-                   pegasus_model.decoder.embed_tokens.state_dict(), 
-                )
+            bigbird_model.model.shared.load_state_dict(
+                pegasus_model.shared.state_dict()
+            )
+            bigbird_model.model.encoder.embed_tokens.load_state_dict(
+                pegasus_model.encoder.embed_tokens.state_dict()
+            )
+            bigbird_model.model.decoder.embed_tokens.load_state_dict(
+                pegasus_model.decoder.embed_tokens.state_dict(), 
+            )    
 
             bigbird_model.model.encoder.embed_positions.weight[:pegasus_model.config.max_position_embeddings, :].copy_(
                 pegasus_model.encoder.embed_positions.weight

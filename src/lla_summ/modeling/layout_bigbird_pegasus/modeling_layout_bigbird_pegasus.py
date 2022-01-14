@@ -104,12 +104,11 @@ class LayoutBigBirdPegasusLearnedPositionalEmbedding(nn.Embedding):
         return super().forward(positions)
 
 
-class LayoutBigBirdPegasusEmbeddings(nn.Module):
-    """Construct the embeddings from word, position and token_type embeddings."""
+class LayoutEmbeddings(nn.Module):
+    """Construct the layout embeddings."""
 
     def __init__(self, config):
-        super(LayoutBigBirdPegasusEmbeddings, self).__init__()
-        self.word_embeddings = nn.Embedding(config.vocab_size, config.d_model, padding_idx=config.pad_token_id)
+        super(LayoutEmbeddings, self).__init__()
         self.x_position_embeddings = nn.Embedding(config.max_2d_position_embeddings, config.d_model)
         self.y_position_embeddings = nn.Embedding(config.max_2d_position_embeddings, config.d_model)
         self.h_position_embeddings = nn.Embedding(config.max_2d_position_embeddings, config.d_model)
@@ -117,15 +116,9 @@ class LayoutBigBirdPegasusEmbeddings(nn.Module):
 
     def forward(
         self,
-        input_ids=None,
         bbox=None,
-        inputs_embeds=None,
     ):
-        
-        if inputs_embeds is None:
-            inputs_embeds = self.word_embeddings(input_ids)
 
-        words_embeddings = inputs_embeds
         try:
             left_position_embeddings = self.x_position_embeddings(bbox[:, :, 0])
             upper_position_embeddings = self.y_position_embeddings(bbox[:, :, 1])
@@ -138,8 +131,7 @@ class LayoutBigBirdPegasusEmbeddings(nn.Module):
         w_position_embeddings = self.w_position_embeddings(bbox[:, :, 2] - bbox[:, :, 0])
 
         embeddings = (
-            words_embeddings
-            + left_position_embeddings
+            left_position_embeddings
             + upper_position_embeddings
             + right_position_embeddings
             + lower_position_embeddings
@@ -1625,7 +1617,9 @@ class LayoutBigBirdPegasusEncoder(LayoutBigBirdPegasusPreTrainedModel):
         if embed_tokens is not None:
             self.embed_tokens = embed_tokens
         else:
-            self.embed_tokens = LayoutBigBirdPegasusEmbeddings(config)
+            self.embed_tokens = nn.Embedding(config.vocab_size, embed_dim, self.padding_idx)
+            
+        self.embed_layout = LayoutEmbeddings(config)
 
         self.embed_positions = LayoutBigBirdPegasusLearnedPositionalEmbedding(
             config.max_position_embeddings,
@@ -1641,6 +1635,7 @@ class LayoutBigBirdPegasusEncoder(LayoutBigBirdPegasusPreTrainedModel):
     def forward(
         self,
         input_ids=None,
+        bbox=None,
         attention_mask=None,
         head_mask=None,
         inputs_embeds=None,
@@ -1692,12 +1687,18 @@ class LayoutBigBirdPegasusEncoder(LayoutBigBirdPegasusPreTrainedModel):
         else:
             raise ValueError("You have to specify either input_ids or inputs_embeds")
 
+        device = input_ids.device if input_ids is not None else inputs_embeds.device
+
+        if bbox is None:
+            bbox = torch.zeros(tuple(list(input_shape) + [4]), dtype=torch.long, device=device)
+
         if inputs_embeds is None:
             inputs_embeds = self.embed_tokens(input_ids) * self.embed_scale
 
+        embed_layout = self.embed_layout(bbox)
         embed_pos = self.embed_positions(input_shape)
 
-        hidden_states = inputs_embeds + embed_pos
+        hidden_states = inputs_embeds + embed_layout + embed_pos
         hidden_states = nn.functional.dropout(hidden_states, p=self.dropout, training=self.training)
 
         if attention_mask is None:
@@ -1924,10 +1925,10 @@ class LayoutBigBirdPegasusDecoder(LayoutBigBirdPegasusPreTrainedModel):
         self.post_init()
 
     def get_input_embeddings(self):
-        return self.embed_tokens.word_embeddings
+        return self.embed_tokens
 
     def set_input_embeddings(self, value):
-        self.embed_tokens.word_embeddings = value
+        self.embed_tokens = value
 
     # Copied from transformers.models.bart.modeling_bart.BartDecoder._prepare_decoder_attention_mask
     def _prepare_decoder_attention_mask(self, attention_mask, input_shape, inputs_embeds, past_key_values_length):
@@ -2153,8 +2154,9 @@ class LayoutBigBirdPegasusDecoder(LayoutBigBirdPegasusPreTrainedModel):
 class LayoutBigBirdPegasusModel(LayoutBigBirdPegasusPreTrainedModel):
     def __init__(self, config: LayoutBigBirdPegasusConfig):
         super().__init__(config)
-
-        self.shared = LayoutBigBirdPegasusEmbeddings(config)
+        
+        padding_idx, vocab_size = config.pad_token_id, config.vocab_size
+        self.shared = nn.Embedding(vocab_size, config.d_model, padding_idx)
 
         self.encoder = LayoutBigBirdPegasusEncoder(config, self.shared)
         self.decoder = LayoutBigBirdPegasusDecoder(config, self.shared)
@@ -2163,12 +2165,12 @@ class LayoutBigBirdPegasusModel(LayoutBigBirdPegasusPreTrainedModel):
         self.post_init()
 
     def get_input_embeddings(self):
-        return self.shared.word_embeddings
+        return self.shared
 
     def set_input_embeddings(self, value):
         self.shared = value
-        self.encoder.embed_tokens.word_embeddings = self.shared.word_embeddings
-        self.decoder.embed_tokens.word_embeddings = self.shared.word_embeddings
+        self.encoder.embed_tokens = self.shared
+        self.decoder.embed_tokens = self.shared
 
     def get_encoder(self):
         return self.encoder
@@ -2275,10 +2277,10 @@ class LayoutBigBirdPegasusForConditionalGeneration(LayoutBigBirdPegasusPreTraine
     def __init__(self, config: LayoutBigBirdPegasusConfig):
         super().__init__(config)
         self.model = LayoutBigBirdPegasusModel(config)
-        self.register_buffer("final_logits_bias", torch.zeros((1, self.model.shared.word_embeddings.num_embeddings)))
+        self.register_buffer("final_logits_bias", torch.zeros((1, self.model.shared.num_embeddings)))
         self.lm_head = nn.Linear(
             config.d_model, 
-            self.model.shared.word_embeddings.num_embeddings, 
+            self.model.shared.num_embeddings, 
             bias=False
         )
 
