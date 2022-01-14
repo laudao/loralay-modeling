@@ -393,6 +393,7 @@ def main():
     if (
         model_args.model_type in ["bigbird_pegasus", "layout_bigbird_pegasus"]
         and training_args.do_train
+        and not training_args.resume_from_checkpoint
     ):
         model = load_pegasus_weights_into_bigbird()
     else:
