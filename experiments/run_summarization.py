@@ -15,13 +15,11 @@ from filelock import FileLock
 from transformers import (
     PegasusConfig,
     BigBirdPegasusConfig, 
-    EncoderDecoderConfig,
     AutoTokenizer,
     PegasusForConditionalGeneration,
     BigBirdPegasusForConditionalGeneration,
     PegasusModel,
     LayoutLMModel,
-    EncoderDecoderModel,
     DataCollatorForSeq2Seq,
     HfArgumentParser,
     Seq2SeqTrainer,
@@ -41,6 +39,10 @@ import lla_summ.data.datasets.koreascience
 from lla_summ.modeling.layout_bigbird_pegasus import (
     LayoutBigBirdPegasusConfig,
     LayoutBigBirdPegasusForConditionalGeneration
+)
+from lla_summ.modeling.encoder_decoder import (
+    EncoderDecoderConfig,
+    EncoderDecoderModel,
 )
 
 require_version("datasets>=1.8.0", "To fix: pip install -r examples/pytorch/summarization/requirements.txt")
@@ -97,7 +99,10 @@ class ModelArguments:
         default=None, metadata={"help": "Pretrained tokenizer name or path if not the same as model_name"}
     )
     model_name_or_path_for_layout: Optional[str] = field(
-        default=None, metadata={"help": "Path to pretrained model or model identifier from huggingface.co/models, used to initialize the layout embeddings."}
+        default=None, metadata={"help": "If `model_type` = layout-bigbird-pegasus, path to pretrained model or model identifier from huggingface.co/models, used to initialize the layout embeddings."}
+    )
+    decoder_model_name_or_path: Optional[str] = field(
+        default=None, metadata={"help": "If `model_type` = layoutlm, path to pretrained model or model identifier from huggingface.co/models, used to initialize the decoder model."}
     )
     cache_dir: Optional[str] = field(
         default=None,
@@ -308,12 +313,13 @@ def main():
     model_args.model_type = model_args.model_type.lower()
     config_class, model_class, tokenizer_class = MODEL_CLASSES[model_args.model_type]
 
-    config = config_class.from_pretrained(
-        model_args.config_name if model_args.config_name else model_args.model_name_or_path,
-        cache_dir=model_args.cache_dir,
-        revision=model_args.model_revision,
-        use_auth_token=True if model_args.use_auth_token else None,
-    )
+    if model_args.model_type != "layoutlm":
+        config = config_class.from_pretrained(
+            model_args.config_name if model_args.config_name else model_args.model_name_or_path,
+            cache_dir=model_args.cache_dir,
+            revision=model_args.model_revision,
+            use_auth_token=True if model_args.use_auth_token else None,
+        )
     tokenizer = tokenizer_class.from_pretrained(
         model_args.tokenizer_name if model_args.tokenizer_name else model_args.model_name_or_path,
         cache_dir=model_args.cache_dir,
@@ -417,12 +423,17 @@ def main():
     elif model_args.model_type == "layoutlm":
         model = EncoderDecoderModel.from_encoder_decoder_pretrained(
             model_args.model_name_or_path, 
-            "bert-large-uncased",
+            model_args.decoder_model_name_or_path,
             from_tf=bool(".ckpt" in model_args.model_name_or_path),
             cache_dir=model_args.cache_dir,
             revision=model_args.model_revision,
             use_auth_token=True if model_args.use_auth_token else None,
         )
+        # Define all the relevant parameters used for beam search decoding
+        model.config.decoder_start_token_id = tokenizer.cls_token_id
+        model.config.eos_token_id = tokenizer.sep_token_id
+        model.config.pad_token_id = tokenizer.pad_token_id
+        model.config.vocab_size = model.config.encoder.vocab_size
     else:
         model = model_class.from_pretrained(
             model_args.model_name_or_path,
@@ -431,16 +442,15 @@ def main():
             revision=model_args.model_revision,
             use_auth_token=True if model_args.use_auth_token else None,
         )
+    
+    if model.config.model_type != "encoder-decoder":
+        model.resize_token_embeddings(len(tokenizer))
+    else:
+        model.encoder.resize_token_embeddings(len(tokenizer))
+        model.decoder.resize_token_embeddings(len(tokenizer))
 
-        # Define all the relevant parameters used for beam search decoding
-        model.config.decoder_start_token_id = tokenizer.cls_token_id
-        model.config.eos_token_id = tokenizer.sep_token_id
-        model.config.pad_token_id = tokenizer.pad_token_id
-        model.config.vocab_size = model.config.encoder.vocab_size
-    
-    model.resize_token_embeddings(len(tokenizer))
     model.config.early_stopping = True
-    
+        
 
     if model.config.decoder_start_token_id is None:
         raise ValueError("Make sure that `config.decoder_start_token_id` is correctly defined")
@@ -469,6 +479,10 @@ def main():
 
     if training_args.gradient_checkpointing:
         model.config.use_cache = False
+        if model.config.model_type == "encoder-decoder":
+            model.encoder.gradient_checkpointing = True
+            model.decoder.gradient_checkpointing = True
+            training_args.gradient_checkpointing = False
 
     prefix = data_args.source_prefix if data_args.source_prefix is not None else ""
 
