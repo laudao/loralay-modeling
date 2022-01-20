@@ -15,11 +15,13 @@ from filelock import FileLock
 from transformers import (
     PegasusConfig,
     BigBirdPegasusConfig, 
+    EncoderDecoderConfig,
     AutoTokenizer,
     PegasusForConditionalGeneration,
     BigBirdPegasusForConditionalGeneration,
     PegasusModel,
     LayoutLMModel,
+    EncoderDecoderModel,
     DataCollatorForSeq2Seq,
     HfArgumentParser,
     Seq2SeqTrainer,
@@ -35,7 +37,7 @@ import lla_summ.data.datasets.reform_pubmed
 import lla_summ.data.datasets.reform_arxiv
 import lla_summ.data.datasets.hal 
 import lla_summ.data.datasets.scielo
-import lla_summ.data.datasets.koreascience
+import lla_summ.data.datasets.koreascience 
 from lla_summ.modeling.layout_bigbird_pegasus import (
     LayoutBigBirdPegasusConfig,
     LayoutBigBirdPegasusForConditionalGeneration
@@ -59,6 +61,7 @@ except (LookupError, OSError):
 
 
 MODEL_CLASSES = {
+    "layoutlm": (EncoderDecoderConfig, EncoderDecoderModel, AutoTokenizer),
     "pegasus": (PegasusConfig, PegasusForConditionalGeneration, AutoTokenizer),
     "bigbird_pegasus": (BigBirdPegasusConfig, BigBirdPegasusForConditionalGeneration, AutoTokenizer),
     "layout_bigbird_pegasus": (LayoutBigBirdPegasusConfig, LayoutBigBirdPegasusForConditionalGeneration, AutoTokenizer)
@@ -92,6 +95,9 @@ class ModelArguments:
     )
     tokenizer_name: Optional[str] = field(
         default=None, metadata={"help": "Pretrained tokenizer name or path if not the same as model_name"}
+    )
+    model_name_or_path_for_layout: Optional[str] = field(
+        default=None, metadata={"help": "Path to pretrained model or model identifier from huggingface.co/models, used to initialize the layout embeddings."}
     )
     cache_dir: Optional[str] = field(
         default=None,
@@ -335,20 +341,21 @@ def main():
             ) 
 
             if model_args.model_type == "layout_bigbird_pegasus":
-                layoutlm_model = LayoutLMModel.from_pretrained("microsoft/layoutlm-large-uncased")
+                if model_args.model_name_or_path_for_layout:
+                    layoutlm_model = LayoutLMModel.from_pretrained(model_args.model_name_or_path_for_layout)
 
-                bigbird_model.model.encoder.embed_layout.x_position_embeddings.load_state_dict(
-                    layoutlm_model.embeddings.x_position_embeddings.state_dict()
-                )
-                bigbird_model.model.encoder.embed_layout.y_position_embeddings.load_state_dict(
-                    layoutlm_model.embeddings.y_position_embeddings.state_dict()
-                )
-                bigbird_model.model.encoder.embed_layout.h_position_embeddings.load_state_dict(
-                    layoutlm_model.embeddings.h_position_embeddings.state_dict()
-                )
-                bigbird_model.model.encoder.embed_layout.w_position_embeddings.load_state_dict(
-                    layoutlm_model.embeddings.w_position_embeddings.state_dict()
-                )
+                    bigbird_model.model.encoder.embed_layout.x_position_embeddings.load_state_dict(
+                        layoutlm_model.embeddings.x_position_embeddings.state_dict()
+                    )
+                    bigbird_model.model.encoder.embed_layout.y_position_embeddings.load_state_dict(
+                        layoutlm_model.embeddings.y_position_embeddings.state_dict()
+                    )
+                    bigbird_model.model.encoder.embed_layout.h_position_embeddings.load_state_dict(
+                        layoutlm_model.embeddings.h_position_embeddings.state_dict()
+                    )
+                    bigbird_model.model.encoder.embed_layout.w_position_embeddings.load_state_dict(
+                        layoutlm_model.embeddings.w_position_embeddings.state_dict()
+                    )
 
             bigbird_model.model.encoder.embed_positions.weight[:pegasus_model.config.max_position_embeddings, :].copy_(
                 pegasus_model.encoder.embed_positions.weight
@@ -407,6 +414,15 @@ def main():
         and training_args.do_train
     ):
         model = load_pegasus_weights_into_bigbird()
+    elif model_args.model_type == "layoutlm":
+        model = EncoderDecoderModel.from_encoder_decoder_pretrained(
+            model_args.model_name_or_path, 
+            "bert-large-uncased",
+            from_tf=bool(".ckpt" in model_args.model_name_or_path),
+            cache_dir=model_args.cache_dir,
+            revision=model_args.model_revision,
+            use_auth_token=True if model_args.use_auth_token else None,
+        )
     else:
         model = model_class.from_pretrained(
             model_args.model_name_or_path,
@@ -415,6 +431,12 @@ def main():
             revision=model_args.model_revision,
             use_auth_token=True if model_args.use_auth_token else None,
         )
+
+        # Define all the relevant parameters used for beam search decoding
+        model.config.decoder_start_token_id = tokenizer.cls_token_id
+        model.config.eos_token_id = tokenizer.sep_token_id
+        model.config.pad_token_id = tokenizer.pad_token_id
+        model.config.vocab_size = model.config.encoder.vocab_size
     
     model.resize_token_embeddings(len(tokenizer))
     model.config.early_stopping = True
