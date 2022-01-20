@@ -114,11 +114,7 @@ class LayoutEmbeddings(nn.Module):
         self.h_position_embeddings = nn.Embedding(config.max_2d_position_embeddings, config.d_model)
         self.w_position_embeddings = nn.Embedding(config.max_2d_position_embeddings, config.d_model)
 
-    def forward(
-        self,
-        bbox=None,
-    ):
-
+    def forward(self, bbox=None):
         try:
             left_position_embeddings = self.x_position_embeddings(bbox[:, :, 0])
             upper_position_embeddings = self.y_position_embeddings(bbox[:, :, 1])

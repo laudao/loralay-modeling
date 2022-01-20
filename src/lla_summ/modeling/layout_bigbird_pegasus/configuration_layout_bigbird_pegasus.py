@@ -142,7 +142,7 @@ class LayoutBigBirdPegasusConfig(PretrainedConfig):
         block_size=64,
         num_random_blocks=3,
         use_bias=False,
-        max_2d_position_embeddings=4096,
+        max_2d_position_embeddings=1024,
         **kwargs
     ):
         self.vocab_size = vocab_size

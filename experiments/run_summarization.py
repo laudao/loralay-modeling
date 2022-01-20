@@ -19,6 +19,7 @@ from transformers import (
     PegasusForConditionalGeneration,
     BigBirdPegasusForConditionalGeneration,
     PegasusModel,
+    LayoutLMModel,
     DataCollatorForSeq2Seq,
     HfArgumentParser,
     Seq2SeqTrainer,
@@ -31,6 +32,10 @@ from transformers.utils import check_min_version
 from transformers.utils.versions import require_version
 
 import lla_summ.data.datasets.reform_pubmed
+import lla_summ.data.datasets.reform_arxiv
+import lla_summ.data.datasets.hal 
+import lla_summ.data.datasets.scielo
+import lla_summ.data.datasets.koreascience
 from lla_summ.modeling.layout_bigbird_pegasus import (
     LayoutBigBirdPegasusConfig,
     LayoutBigBirdPegasusForConditionalGeneration
@@ -59,6 +64,16 @@ MODEL_CLASSES = {
     "layout_bigbird_pegasus": (LayoutBigBirdPegasusConfig, LayoutBigBirdPegasusForConditionalGeneration, AutoTokenizer)
 }
 
+DATASET2FILE = {
+    "reform_pubmed": lla_summ.data.datasets.reform_pubmed.__file__,
+    "reform_arxiv": lla_summ.data.datasets.reform_arxiv.__file__,
+    "hal": lla_summ.data.datasets.hal.__file__,
+    "scielo_es": lla_summ.data.datasets.scielo.__file__,
+    "scielo_pt": lla_summ.data.datasets.scielo.__file__,
+    "koreascience": lla_summ.data.datasets.koreascience.__file__,
+}
+
+_PADDING_BBOX = [0, 0, 0, 0]
 
 @dataclass
 class ModelArguments:
@@ -111,7 +126,7 @@ class DataTrainingArguments:
     Arguments pertaining to what data we are going to input our model for training and eval.
     """
     dataset_name: Optional[str] = field(
-        default=None, metadata={"help": "The name of the dataset to use."}
+        default=None, metadata={"help": "The name of the dataset to use, selected in the list: " + ", ".join(DATASET2FILE.keys())}
     )
     data_dir: Optional[str] = field(
         default=None, metadata={"help": "The path to the data directory."}
@@ -210,17 +225,6 @@ class DataTrainingArguments:
             self.val_max_target_length = self.max_target_length
 
 
-dataset2file = {
-    "reform_pubmed": lla_summ.data.datasets.reform_pubmed.__file__,
-    "reform_arxiv": None,
-    "hal": None,
-    "scielo_es": None,
-    "scielo_pt": None,
-    "korsc": None,
-}
-
-_PADDING_BBOX = [0, 0, 0, 0]
-
 def main():
     # See all possible arguments in src/transformers/training_args.py
     # or by passing the --help flag to this script.
@@ -285,8 +289,10 @@ def main():
     # Set seed before initializing model.
     set_seed(training_args.seed)
 
+    data_args.dataset_name = data_args.dataset_name.lower()
+
     raw_datasets = load_dataset(
-        os.path.abspath(dataset2file[data_args.dataset_name]),
+        os.path.abspath(DATASET2FILE[data_args.dataset_name]),
         data_dir=data_args.data_dir,
         cache_dir=data_args.cached_data_dir,
         download_mode=data_args.download_mode,
@@ -326,10 +332,23 @@ def main():
             )
             bigbird_model.model.encoder.embed_tokens.load_state_dict(
                 pegasus_model.encoder.embed_tokens.state_dict()
-            )
-            bigbird_model.model.decoder.embed_tokens.load_state_dict(
-                pegasus_model.decoder.embed_tokens.state_dict(), 
-            )    
+            ) 
+
+            if model_args.model_type == "layout_bigbird_pegasus":
+                layoutlm_model = LayoutLMModel.from_pretrained("microsoft/layoutlm-large-uncased")
+
+                bigbird_model.model.encoder.embed_layout.x_position_embeddings.load_state_dict(
+                    layoutlm_model.embeddings.x_position_embeddings.state_dict()
+                )
+                bigbird_model.model.encoder.embed_layout.y_position_embeddings.load_state_dict(
+                    layoutlm_model.embeddings.y_position_embeddings.state_dict()
+                )
+                bigbird_model.model.encoder.embed_layout.h_position_embeddings.load_state_dict(
+                    layoutlm_model.embeddings.h_position_embeddings.state_dict()
+                )
+                bigbird_model.model.encoder.embed_layout.w_position_embeddings.load_state_dict(
+                    layoutlm_model.embeddings.w_position_embeddings.state_dict()
+                )
 
             bigbird_model.model.encoder.embed_positions.weight[:pegasus_model.config.max_position_embeddings, :].copy_(
                 pegasus_model.encoder.embed_positions.weight
@@ -364,6 +383,10 @@ def main():
                 bigbird_model.model.encoder.layers[i].final_layer_norm.load_state_dict(
                     pegasus_model.encoder.layers[i].final_layer_norm.state_dict()
                 )
+
+            bigbird_model.model.decoder.embed_tokens.load_state_dict(
+                pegasus_model.decoder.embed_tokens.state_dict(), 
+            )   
                 
             bigbird_model.model.decoder.embed_positions.weight[:pegasus_model.config.max_position_embeddings, :].copy_(
                 pegasus_model.decoder.embed_positions.weight

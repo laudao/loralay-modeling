@@ -10,23 +10,23 @@ _ARTICLE_BBOXES = "article_bboxes"
 _ARTICLE_NORM_BBOXES = "article_norm_bboxes"
 _ABSTRACT = "abstract"
 
-class ReformPubMedSummarizationConfig(datasets.BuilderConfig):
-    """BuilderConfig for ReformPubMedSummarization."""
+class KoreaScienceSummarizationConfig(datasets.BuilderConfig):
+    """BuilderConfig for KoreaScienceSummarization."""
     def __init__(self, **kwargs):
-        """BuilderConfig for PubMedSummarization.
+        """BuilderConfig for KoreaScienceSummarization.
         Args:
           **kwargs: keyword arguments forwarded to super.
         """
-        super(ReformPubMedSummarizationConfig, self).__init__(**kwargs)
+        super(KoreaScienceSummarizationConfig, self).__init__(**kwargs)
 
-class ReformPubMedSummarizationDataset(datasets.GeneratorBasedBuilder):
-    """PubMedSummarization Dataset."""
+class KoreaScienceSummarizationDataset(datasets.GeneratorBasedBuilder):
+    """KoreaScienceSummarization Dataset."""
     
     BUILDER_CONFIGS = [
-        ReformPubMedSummarizationConfig(
+        KoreaScienceSummarizationConfig(
             name="document",
             version=datasets.Version("1.0.0"),
-            description="Reformulated PubMed dataset for summarization",
+            description="KoreaScience dataset for summarization",
         ),
     ]
 
@@ -71,7 +71,7 @@ class ReformPubMedSummarizationDataset(datasets.GeneratorBasedBuilder):
 
     
     def _generate_examples(self, data_path, abstract_path):
-        """Generate ReformPubMedSummarization examples."""
+        """Generate KoreaScienceSummarization examples."""
         filenames = sorted(os.listdir(data_path))
 
         guid = 0

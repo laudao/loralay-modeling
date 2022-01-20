@@ -10,23 +10,31 @@ _ARTICLE_BBOXES = "article_bboxes"
 _ARTICLE_NORM_BBOXES = "article_norm_bboxes"
 _ABSTRACT = "abstract"
 
-class ReformPubMedSummarizationConfig(datasets.BuilderConfig):
-    """BuilderConfig for ReformPubMedSummarization."""
-    def __init__(self, **kwargs):
-        """BuilderConfig for PubMedSummarization.
+class SciELOSummarizationConfig(datasets.BuilderConfig):
+    """BuilderConfig for SciELOSummarization."""
+    def __init__(self, lang, **kwargs):
+        """BuilderConfig for SciELOSummarization.
         Args:
           **kwargs: keyword arguments forwarded to super.
         """
-        super(ReformPubMedSummarizationConfig, self).__init__(**kwargs)
+        super(SciELOSummarizationConfig, self).__init__(**kwargs)
+        self.lang = lang
 
-class ReformPubMedSummarizationDataset(datasets.GeneratorBasedBuilder):
-    """PubMedSummarization Dataset."""
+class SciELOSummarizationDataset(datasets.GeneratorBasedBuilder):
+    """SciELOSummarization Dataset."""
     
     BUILDER_CONFIGS = [
-        ReformPubMedSummarizationConfig(
+        SciELOSummarizationConfig(
             name="document",
             version=datasets.Version("1.0.0"),
-            description="Reformulated PubMed dataset for summarization",
+            description="SciELO dataset for summarization",
+            lang="es",
+        ),
+        SciELOSummarizationConfig(
+            name="document",
+            version=datasets.Version("1.0.0"),
+            description="SciELO dataset for summarization",
+            lang="pt",
         ),
     ]
 
@@ -71,7 +79,7 @@ class ReformPubMedSummarizationDataset(datasets.GeneratorBasedBuilder):
 
     
     def _generate_examples(self, data_path, abstract_path):
-        """Generate ReformPubMedSummarization examples."""
+        """Generate SciELOSummarization examples."""
         filenames = sorted(os.listdir(data_path))
 
         guid = 0

@@ -2,3 +2,5 @@ transformers==4.15.0
 torch==1.10.1
 sentencepiece==0.1.96
 datasets==1.17.0
+absl-py==1.0.0
+rouge_score==0.0.4
