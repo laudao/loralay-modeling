@@ -324,12 +324,30 @@ def main():
             revision=model_args.model_revision,
             use_auth_token=True if model_args.use_auth_token else None,
         )
+        if model_args.model_type == "bigbird_mbart":
+            config.max_position_embeddings = 4096
+
+    if model_args.model_type in ["mbart", "bigbird_mbart"]:
+        dataset_to_lid = {
+            "hal": "fr_XX",
+            "scielo_es": "es_XX",
+            "scielo_pt": "pt_XX",
+            "koreascience": "ko_KR",
+        }
+        additional_tokenizer_kwargs = {
+            "src_lang": dataset_to_lid[data_args.dataset_name],
+            "tgt_lang": dataset_to_lid[data_args.dataset_name],
+        }
+    else:
+        additional_tokenizer_kwargs = {}
+
     tokenizer = tokenizer_class.from_pretrained(
         model_args.tokenizer_name if model_args.tokenizer_name else model_args.model_name_or_path,
         cache_dir=model_args.cache_dir,
         use_fast=model_args.use_fast_tokenizer,
         revision=model_args.model_revision,
         use_auth_token=True if model_args.use_auth_token else None,
+        **additional_tokenizer_kwargs,
     )
 
     def load_weights_into_bigbird():
@@ -451,7 +469,7 @@ def main():
                 revision=model_args.model_revision,
                 use_auth_token=True if model_args.use_auth_token else None,
             )
-        model = load_weights_into_bigbird(source_model)
+        model = load_weights_into_bigbird()
     elif model_args.model_type == "layoutlm":
         if training_args.do_train:
             model = EncoderDecoderModel.from_encoder_decoder_pretrained(
