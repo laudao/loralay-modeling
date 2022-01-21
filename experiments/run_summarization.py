@@ -326,6 +326,7 @@ def main():
         )
         if model_args.model_type == "bigbird_mbart":
             config.max_position_embeddings = 4096
+            config.max_length = 256
 
     if model_args.model_type in ["mbart", "bigbird_mbart"]:
         dataset_to_lid = {
