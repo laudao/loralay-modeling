@@ -19,6 +19,7 @@ from transformers import (
     PegasusForConditionalGeneration,
     BigBirdPegasusForConditionalGeneration,
     PegasusModel,
+    MBartModel,
     LayoutLMModel,
     DataCollatorForSeq2Seq,
     HfArgumentParser,
@@ -66,7 +67,8 @@ MODEL_CLASSES = {
     "layoutlm": (EncoderDecoderConfig, EncoderDecoderModel, AutoTokenizer),
     "pegasus": (PegasusConfig, PegasusForConditionalGeneration, AutoTokenizer),
     "bigbird_pegasus": (BigBirdPegasusConfig, BigBirdPegasusForConditionalGeneration, AutoTokenizer),
-    "layout_bigbird_pegasus": (LayoutBigBirdPegasusConfig, LayoutBigBirdPegasusForConditionalGeneration, AutoTokenizer)
+    "layout_bigbird_pegasus": (LayoutBigBirdPegasusConfig, LayoutBigBirdPegasusForConditionalGeneration, AutoTokenizer),
+    "bigbird_mbart": (BigBirdPegasusConfig, BigBirdPegasusForConditionalGeneration, AutoTokenizer)
 }
 
 DATASET2FILE = {
@@ -79,6 +81,8 @@ DATASET2FILE = {
 }
 
 _PADDING_BBOX = [0, 0, 0, 0]
+_PEGASUS_MAX_SEQ_LEN = 1024
+_MBART_MAX_SEQ_LEN = 1026
 
 @dataclass
 class ModelArguments:
@@ -328,25 +332,20 @@ def main():
         use_auth_token=True if model_args.use_auth_token else None,
     )
 
-    def load_pegasus_weights_into_bigbird():
+    def load_weights_into_bigbird():
         bigbird_model = model_class(config=config)
-        pegasus_model = PegasusModel.from_pretrained(
-            model_args.model_name_or_path,
-            from_tf=bool(".ckpt" in model_args.model_name_or_path),
-            cache_dir=model_args.cache_dir,
-            revision=model_args.model_revision,
-            use_auth_token=True if model_args.use_auth_token else None,
-        )
 
         with torch.no_grad():
+            # Token embeddings
             bigbird_model.model.shared.load_state_dict(
-                pegasus_model.shared.state_dict()
+                source_model.shared.state_dict()
             )
             bigbird_model.model.encoder.embed_tokens.load_state_dict(
-                pegasus_model.encoder.embed_tokens.state_dict()
+                source_model.encoder.embed_tokens.state_dict()
             ) 
 
-            if model_args.model_type == "layout_bigbird_pegasus":
+            # Layout embeddings
+            if model_args.model_type.startswith("layout_bigbird"):
                 if model_args.model_name_or_path_for_layout:
                     layoutlm_model = LayoutLMModel.from_pretrained(model_args.model_name_or_path_for_layout)
 
@@ -363,77 +362,119 @@ def main():
                         layoutlm_model.embeddings.w_position_embeddings.state_dict()
                     )
 
-            bigbird_model.model.encoder.embed_positions.weight[:pegasus_model.config.max_position_embeddings, :].copy_(
-                pegasus_model.encoder.embed_positions.weight
-            )
-            bigbird_model.model.encoder.layernorm_embedding.load_state_dict(
-                pegasus_model.encoder.layer_norm.state_dict()
+            # Position embeddings
+            if "pegasus" in model_args.model_type:
+                max_position_embeddings_to_copy = _PEGASUS_MAX_SEQ_LEN
+            else: # MBart
+                max_position_embeddings_to_copy = _MBART_MAX_SEQ_LEN
+            bigbird_model.model.encoder.embed_positions.weight[:max_position_embeddings_to_copy, :].copy_(
+                source_model.encoder.embed_positions.weight
             )
 
+            # Layer Normalization
+            bigbird_model.model.encoder.layernorm_embedding.load_state_dict(
+                source_model.encoder.layer_norm.state_dict()
+            )
+
+            # Encoder layers
             for i in range(len(bigbird_model.model.encoder.layers)):
                 # Self-attention weights
                 self_attention_mapping = {
-                    bigbird_model.model.encoder.layers[i].self_attn.self.query: pegasus_model.encoder.layers[i].self_attn.q_proj,
-                    bigbird_model.model.encoder.layers[i].self_attn.self.key: pegasus_model.encoder.layers[i].self_attn.k_proj,
-                    bigbird_model.model.encoder.layers[i].self_attn.self.value: pegasus_model.encoder.layers[i].self_attn.v_proj
+                    bigbird_model.model.encoder.layers[i].self_attn.self.query: source_model.encoder.layers[i].self_attn.q_proj,
+                    bigbird_model.model.encoder.layers[i].self_attn.self.key: source_model.encoder.layers[i].self_attn.k_proj,
+                    bigbird_model.model.encoder.layers[i].self_attn.self.value: source_model.encoder.layers[i].self_attn.v_proj
                 }
                 for target, origin in self_attention_mapping.items():
                     target.load_state_dict(origin.state_dict(), strict=False) # bias is set to False in BigBirdPegasusEncoderAttention.self_attn
                 bigbird_model.model.encoder.layers[i].self_attn.output.load_state_dict(
-                    pegasus_model.encoder.layers[i].self_attn.out_proj.state_dict(), strict=False 
+                    source_model.encoder.layers[i].self_attn.out_proj.state_dict(), strict=False 
                 ) # bias is set to False in BigBirdPegasusEncoderAttention.self_attn
                 
-
+                # Layer normalization 
                 bigbird_model.model.encoder.layers[i].self_attn_layer_norm.load_state_dict(
-                    pegasus_model.encoder.layers[i].self_attn_layer_norm.state_dict()
+                    source_model.encoder.layers[i].self_attn_layer_norm.state_dict()
                 )
+                # Linear layers
                 bigbird_model.model.encoder.layers[i].fc1.load_state_dict(
-                    pegasus_model.encoder.layers[i].fc1.state_dict()
+                    source_model.encoder.layers[i].fc1.state_dict()
                 )
                 bigbird_model.model.encoder.layers[i].fc2.load_state_dict(
-                    pegasus_model.encoder.layers[i].fc2.state_dict()
+                    source_model.encoder.layers[i].fc2.state_dict()
                 )
+                # Layer normalization 
                 bigbird_model.model.encoder.layers[i].final_layer_norm.load_state_dict(
-                    pegasus_model.encoder.layers[i].final_layer_norm.state_dict()
+                    source_model.encoder.layers[i].final_layer_norm.state_dict()
                 )
 
+            # Token embeddings
             bigbird_model.model.decoder.embed_tokens.load_state_dict(
-                pegasus_model.decoder.embed_tokens.state_dict(), 
+                source_model.decoder.embed_tokens.state_dict(), 
             )   
-                
-            bigbird_model.model.decoder.embed_positions.weight[:pegasus_model.config.max_position_embeddings, :].copy_(
-                pegasus_model.decoder.embed_positions.weight
+            # Position embeddings
+            bigbird_model.model.decoder.embed_positions.weight[:max_position_embeddings_to_copy, :].copy_(
+                source_model.decoder.embed_positions.weight
             )
+            # Layer normalization
             bigbird_model.model.decoder.layernorm_embedding.load_state_dict(
-                pegasus_model.decoder.layer_norm.state_dict()
+                source_model.decoder.layer_norm.state_dict()
             )
 
+            # Copy whole decoder layers (BigBirdPegasusDecoder's structure is the same as PegasusDecoder's and MBartDecoder's)
             for i in range(len(bigbird_model.model.decoder.layers)):
                 bigbird_model.model.decoder.layers[i].load_state_dict(
-                    pegasus_model.decoder.layers[i].state_dict(), strict=False
+                    source_model.decoder.layers[i].state_dict(), strict=False
                 ) # Bias is set to False in BigBirdPegasusEncoderAttention.self_attn
         
         return bigbird_model
         
     if (
-        model_args.model_type in ["bigbird_pegasus", "layout_bigbird_pegasus"]
+        model_args.model_type in [
+            "bigbird_pegasus", 
+            "layout_bigbird_pegasus",
+            "bigbird_mbart",
+        ]
         and training_args.do_train
     ):
-        model = load_pegasus_weights_into_bigbird()
+        if "pegasus" in model_args.model_type:
+            source_model = PegasusModel.from_pretrained(
+                model_args.model_name_or_path,
+                from_tf=bool(".ckpt" in model_args.model_name_or_path),
+                cache_dir=model_args.cache_dir,
+                revision=model_args.model_revision,
+                use_auth_token=True if model_args.use_auth_token else None,
+            )
+        else:
+            source_model = MBartModel.from_pretrained(
+                model_args.model_name_or_path,
+                from_tf=bool(".ckpt" in model_args.model_name_or_path),
+                cache_dir=model_args.cache_dir,
+                revision=model_args.model_revision,
+                use_auth_token=True if model_args.use_auth_token else None,
+            )
+        model = load_weights_into_bigbird(source_model)
     elif model_args.model_type == "layoutlm":
-        model = EncoderDecoderModel.from_encoder_decoder_pretrained(
-            model_args.model_name_or_path, 
-            model_args.decoder_model_name_or_path,
-            from_tf=bool(".ckpt" in model_args.model_name_or_path),
-            cache_dir=model_args.cache_dir,
-            revision=model_args.model_revision,
-            use_auth_token=True if model_args.use_auth_token else None,
-        )
-        # Define all the relevant parameters used for beam search decoding
-        model.config.decoder_start_token_id = tokenizer.cls_token_id
-        model.config.eos_token_id = tokenizer.sep_token_id
-        model.config.pad_token_id = tokenizer.pad_token_id
-        model.config.vocab_size = model.config.encoder.vocab_size
+        if training_args.do_train:
+            model = EncoderDecoderModel.from_encoder_decoder_pretrained(
+                model_args.model_name_or_path, 
+                model_args.decoder_model_name_or_path,
+                from_tf=bool(".ckpt" in model_args.model_name_or_path),
+                cache_dir=model_args.cache_dir,
+                revision=model_args.model_revision,
+                use_auth_token=True if model_args.use_auth_token else None,
+            )
+            # Define all the relevant parameters used for beam search decoding
+            model.config.decoder_start_token_id = tokenizer.cls_token_id
+            model.config.eos_token_id = tokenizer.sep_token_id
+            model.config.pad_token_id = tokenizer.pad_token_id
+            model.config.vocab_size = model.config.encoder.vocab_size
+        else:
+            model = EncoderDecoderModel.from_pretrained(
+                model_args.model_name_or_path,
+                from_tf=bool(".ckpt" in model_args.model_name_or_path),
+                cache_dir=model_args.cache_dir,
+                revision=model_args.model_revision,
+                use_auth_token=True if model_args.use_auth_token else None,
+            )
     else:
         model = model_class.from_pretrained(
             model_args.model_name_or_path,
