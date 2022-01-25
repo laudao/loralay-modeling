@@ -19,7 +19,9 @@ from transformers import (
     PegasusForConditionalGeneration,
     BigBirdPegasusForConditionalGeneration,
     PegasusModel,
+    MBartConfig,
     MBartModel,
+    MBartForConditionalGeneration,
     LayoutLMModel,
     DataCollatorForSeq2Seq,
     HfArgumentParser,
@@ -50,7 +52,6 @@ require_version("datasets>=1.8.0", "To fix: pip install -r examples/pytorch/summ
 
 logger = logging.getLogger(__name__)
 
-torch.cuda.empty_cache()
 
 try:
     nltk.data.find("tokenizers/punkt")
@@ -68,6 +69,7 @@ MODEL_CLASSES = {
     "pegasus": (PegasusConfig, PegasusForConditionalGeneration, AutoTokenizer),
     "bigbird_pegasus": (BigBirdPegasusConfig, BigBirdPegasusForConditionalGeneration, AutoTokenizer),
     "layout_bigbird_pegasus": (LayoutBigBirdPegasusConfig, LayoutBigBirdPegasusForConditionalGeneration, AutoTokenizer),
+    "mbart": (MBartConfig, MBartForConditionalGeneration, AutoTokenizer),
     "bigbird_mbart": (BigBirdPegasusConfig, BigBirdPegasusForConditionalGeneration, AutoTokenizer)
 }
 
@@ -232,7 +234,7 @@ class DataTrainingArguments:
     path_to_metric: Optional[str] = field(
         default=None, metadata={"help": "Path to metric file."}
     )
-
+    
     def __post_init__(self):
         if self.data_dir is None:
             raise ValueError("Need a data path.")
