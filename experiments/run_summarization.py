@@ -333,6 +333,10 @@ def main():
     set_seed(training_args.seed)
 
     data_args.dataset_name = data_args.dataset_name.lower()
+    assert (
+        data_args.dataset_name in DATASET2FILE
+    ), f'`model_type` must be selected in the list {", ".join(DATASET2FILE.keys())}'
+
 
     raw_datasets = load_dataset(
         os.path.abspath(DATASET2FILE[data_args.dataset_name]),
@@ -343,6 +347,10 @@ def main():
 
 
     model_args.model_type = model_args.model_type.lower()
+    assert (
+        model_args.model_type in MODEL_CLASSES
+    ), f'`model_type` must be selected in the list {", ".join(MODEL_CLASSES.keys())}'
+
     config_class, model_class = MODEL_CLASSES[model_args.model_type]
 
     if model_args.model_type != "layoutlm":
@@ -586,12 +594,8 @@ def main():
         return
 
     if isinstance(tokenizer, tuple(MULTILINGUAL_TOKENIZERS)):
-        assert (
-            data_args.lang is not None
-        ), f"{tokenizer.__class__.__name__} is a multilingual tokenizer which requires --lang argument"
-
-        tokenizer.src_lang = data_args.lang
-        tokenizer.tgt_lang = data_args.lang
+        tokenizer.src_lang = DATASET_TO_LID[data_args.dataset_name]
+        tokenizer.tgt_lang = DATASET_TO_LID[data_args.dataset_name]
 
         # For multilingual translation models like mBART-50 and M2M100 we need to force the target language token
         # as the first generated token. We ask the user to explicitly provide this as --forced_bos_token argument.
