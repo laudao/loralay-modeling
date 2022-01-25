@@ -23,7 +23,7 @@ logger = logging.get_logger(__name__)
 
 class LayoutBigBirdPegasusConfig(PretrainedConfig):
     r"""
-    This is the configuration class to store the configuration of a [`BigBirdPegasusModel`]. It is
+    This is the configuration class to store the configuration of a [`LayoutBigBirdPegasusModel`]. It is
     used to instantiate an BigBirdPegasus model according to the specified arguments, defining the model architecture.
     Instantiating a configuration with the defaults will yield a similar configuration to that of the BigBirdPegasus
     [google/bigbird-pegasus-large-arxiv](https://huggingface.co/google/bigbird-pegasus-large-arxiv) architecture.

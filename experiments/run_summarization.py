@@ -16,6 +16,10 @@ from transformers import (
     PegasusConfig,
     BigBirdPegasusConfig, 
     AutoTokenizer,
+    MBartTokenizer,
+    MBartTokenizerFast,
+    MBart50Tokenizer,
+    MBart50TokenizerFast,
     PegasusForConditionalGeneration,
     BigBirdPegasusForConditionalGeneration,
     PegasusModel,
@@ -87,9 +91,18 @@ DATASET2FILE = {
     "koreascience": lla_summ.data.datasets.koreascience.__file__,
 }
 
+DATASET_TO_LID = {
+    "hal": "fr_XX",
+    "scielo_es": "es_XX",
+    "scielo_pt": "pt_XX",
+    "koreascience": "ko_KR",
+}
+
 _PADDING_BBOX = [0, 0, 0, 0]
 _PEGASUS_MAX_SEQ_LEN = 1024
 _MBART_MAX_SEQ_LEN = 1026
+
+MULTILINGUAL_TOKENIZERS = [MBartTokenizer, MBartTokenizerFast, MBart50Tokenizer, MBart50TokenizerFast]
 
 @dataclass
 class ModelArguments:
@@ -235,6 +248,14 @@ class DataTrainingArguments:
     source_prefix: Optional[str] = field(
         default=None, metadata={"help": "A prefix to add before every source text (useful for T5 models)."}
     )
+    forced_bos_token: Optional[str] = field(
+        default=None,
+        metadata={
+            "help": "The token to force as the first generated token after the decoder_start_token_id."
+            "Useful for multilingual models like mBART where the first generated token"
+            "needs to be the target language token (Usually it is the target language token)"
+        },
+    )
 
     path_to_metric: Optional[str] = field(
         default=None, metadata={"help": "Path to metric file."}
@@ -335,19 +356,6 @@ def main():
             config.max_position_embeddings = 4096
             config.max_length = 256
 
-    if model_args.model_type in ["mbart", "bigbird_mbart"]:
-        dataset_to_lid = {
-            "hal": "fr_XX",
-            "scielo_es": "es_XX",
-            "scielo_pt": "pt_XX",
-            "koreascience": "ko_KR",
-        }
-        additional_tokenizer_kwargs = {
-            "src_lang": dataset_to_lid[data_args.dataset_name],
-            "tgt_lang": dataset_to_lid[data_args.dataset_name],
-        }
-    else:
-        additional_tokenizer_kwargs = {}
 
     tokenizer = AutoTokenizer.from_pretrained(
         model_args.tokenizer_name if model_args.tokenizer_name else model_args.model_name_or_path,
@@ -355,7 +363,6 @@ def main():
         use_fast=model_args.use_fast_tokenizer,
         revision=model_args.model_revision,
         use_auth_token=True if model_args.use_auth_token else None,
-        **additional_tokenizer_kwargs,
     )
 
     if model_args.model_type in [
@@ -524,7 +531,13 @@ def main():
         model.decoder.resize_token_embeddings(len(tokenizer))
 
     model.config.early_stopping = True
-        
+
+    if model.config.decoder_start_token_id is None and isinstance(tokenizer, (MBartTokenizer, MBartTokenizerFast)):
+        if isinstance(tokenizer, MBartTokenizer):
+            model.config.decoder_start_token_id = tokenizer.lang_code_to_id[DATASET_TO_LID[data_args.dataset_name]]
+        else:
+            model.config.decoder_start_token_id = tokenizer.convert_tokens_to_ids(DATASET_TO_LID[data_args.dataset_name])
+            
 
     if model.config.decoder_start_token_id is None:
         raise ValueError("Make sure that `config.decoder_start_token_id` is correctly defined")
@@ -571,6 +584,21 @@ def main():
     else:
         logger.info("There is nothing to do. Please pass `do_train`, `do_eval` and/or `do_predict`.")
         return
+
+    if isinstance(tokenizer, tuple(MULTILINGUAL_TOKENIZERS)):
+        assert (
+            data_args.lang is not None
+        ), f"{tokenizer.__class__.__name__} is a multilingual tokenizer which requires --lang argument"
+
+        tokenizer.src_lang = data_args.lang
+        tokenizer.tgt_lang = data_args.lang
+
+        # For multilingual translation models like mBART-50 and M2M100 we need to force the target language token
+        # as the first generated token. We ask the user to explicitly provide this as --forced_bos_token argument.
+        forced_bos_token_id = (
+            tokenizer.lang_code_to_id[data_args.forced_bos_token] if data_args.forced_bos_token is not None else None
+        )
+        model.config.forced_bos_token_id = forced_bos_token_id
 
     text_column = "article_words"
     summary_column = "abstract"
