@@ -39,6 +39,10 @@ import lla_summ.data.datasets.reform_arxiv
 import lla_summ.data.datasets.hal 
 import lla_summ.data.datasets.scielo
 import lla_summ.data.datasets.koreascience 
+from lla_summ.modeling.layout_pegasus import (
+    LayoutPegasusConfig,
+    LayoutPegasusForConditionalGeneration
+)
 from lla_summ.modeling.layout_bigbird_pegasus import (
     LayoutBigBirdPegasusConfig,
     LayoutBigBirdPegasusForConditionalGeneration
@@ -65,12 +69,13 @@ except (LookupError, OSError):
 
 
 MODEL_CLASSES = {
-    "layoutlm": (EncoderDecoderConfig, EncoderDecoderModel, AutoTokenizer),
-    "pegasus": (PegasusConfig, PegasusForConditionalGeneration, AutoTokenizer),
-    "bigbird_pegasus": (BigBirdPegasusConfig, BigBirdPegasusForConditionalGeneration, AutoTokenizer),
-    "layout_bigbird_pegasus": (LayoutBigBirdPegasusConfig, LayoutBigBirdPegasusForConditionalGeneration, AutoTokenizer),
-    "mbart": (MBartConfig, MBartForConditionalGeneration, AutoTokenizer),
-    "bigbird_mbart": (BigBirdPegasusConfig, BigBirdPegasusForConditionalGeneration, AutoTokenizer)
+    "layoutlm": (EncoderDecoderConfig, EncoderDecoderModel),
+    "pegasus": (PegasusConfig, PegasusForConditionalGeneration),
+    "layout_pegasus": (LayoutPegasusConfig, LayoutPegasusForConditionalGeneration),
+    "bigbird_pegasus": (BigBirdPegasusConfig, BigBirdPegasusForConditionalGeneration),
+    "layout_bigbird_pegasus": (LayoutBigBirdPegasusConfig, LayoutBigBirdPegasusForConditionalGeneration),
+    "mbart": (MBartConfig, MBartForConditionalGeneration),
+    "bigbird_mbart": (BigBirdPegasusConfig, BigBirdPegasusForConditionalGeneration)
 }
 
 DATASET2FILE = {
@@ -317,7 +322,7 @@ def main():
 
 
     model_args.model_type = model_args.model_type.lower()
-    config_class, model_class, tokenizer_class = MODEL_CLASSES[model_args.model_type]
+    config_class, model_class = MODEL_CLASSES[model_args.model_type]
 
     if model_args.model_type != "layoutlm":
         config = config_class.from_pretrained(
@@ -344,7 +349,7 @@ def main():
     else:
         additional_tokenizer_kwargs = {}
 
-    tokenizer = tokenizer_class.from_pretrained(
+    tokenizer = AutoTokenizer.from_pretrained(
         model_args.tokenizer_name if model_args.tokenizer_name else model_args.model_name_or_path,
         cache_dir=model_args.cache_dir,
         use_fast=model_args.use_fast_tokenizer,
@@ -352,6 +357,13 @@ def main():
         use_auth_token=True if model_args.use_auth_token else None,
         **additional_tokenizer_kwargs,
     )
+
+    if model_args.model_type in [
+        "layoutlm",
+        "layout_pegasus",
+        "layout_bigbird_pegasus",
+    ]:
+        tokenizer.model_input_names = tokenizer.model_input_names + ["bbox"]
 
     def load_weights_into_bigbird():
         bigbird_model = model_class(config=config)
