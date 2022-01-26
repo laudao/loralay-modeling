@@ -472,6 +472,10 @@ def main():
                 bigbird_model.model.decoder.layers[i].load_state_dict(
                     source_model.decoder.layers[i].state_dict(), strict=False
                 ) # Bias is set to False in BigBirdPegasusEncoderAttention.self_attn
+
+            bigbird_model.lm_head.load_state_dict(
+                source_model.lm_head.state_dict()
+            )
         
         return bigbird_model
         
