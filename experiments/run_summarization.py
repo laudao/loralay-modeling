@@ -22,21 +22,20 @@ from transformers import (
     MBart50TokenizerFast,
     PegasusForConditionalGeneration,
     BigBirdPegasusForConditionalGeneration,
-    PegasusModel,
     MBartConfig,
-    MBartModel,
     MBartForConditionalGeneration,
     LayoutLMModel,
     DataCollatorForSeq2Seq,
     HfArgumentParser,
-    Seq2SeqTrainer,
-    Seq2SeqTrainingArguments,
     set_seed,
 )
 from transformers.file_utils import is_offline_mode
 from transformers.trainer_utils import get_last_checkpoint
 from transformers.utils import check_min_version
 from transformers.utils.versions import require_version
+
+from lla_summ.training.trainers import LLASummarizationTrainer
+from lla_summ.training.training_args_llasumm import LLASummarizationTrainingArguments
 
 import lla_summ.data.datasets.reform_pubmed
 import lla_summ.data.datasets.reform_arxiv
@@ -273,7 +272,7 @@ def main():
     # or by passing the --help flag to this script.
     # We now keep distinct sets of args, for a cleaner separation of concerns.
 
-    parser = HfArgumentParser((ModelArguments, DataTrainingArguments, Seq2SeqTrainingArguments))
+    parser = HfArgumentParser((ModelArguments, DataTrainingArguments, LLASummarizationTrainingArguments))
     if len(sys.argv) == 2 and sys.argv[1].endswith(".json"):
         # If we pass only one argument to the script and it's the path to a json file,
         # let's parse it to get our arguments.
@@ -488,7 +487,7 @@ def main():
         and training_args.do_train
     ):
         if "pegasus" in model_args.model_type:
-            source_model = PegasusModel.from_pretrained(
+            source_model = PegasusForConditionalGeneration.from_pretrained(
                 model_args.model_name_or_path,
                 from_tf=bool(".ckpt" in model_args.model_name_or_path),
                 cache_dir=model_args.cache_dir,
@@ -496,7 +495,7 @@ def main():
                 use_auth_token=True if model_args.use_auth_token else None,
             )
         else:
-            source_model = MBartModel.from_pretrained(
+            source_model = MBartForConditionalGeneration.from_pretrained(
                 model_args.model_name_or_path,
                 from_tf=bool(".ckpt" in model_args.model_name_or_path),
                 cache_dir=model_args.cache_dir,
@@ -785,7 +784,7 @@ def main():
 
 
     # Initialize our Trainer
-    trainer = Seq2SeqTrainer(
+    trainer = LLASummarizationTrainer(
         model=model,
         args=training_args,
         train_dataset=train_dataset if training_args.do_train else None,
