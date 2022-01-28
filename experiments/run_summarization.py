@@ -385,10 +385,10 @@ def main():
         with torch.no_grad():
             # Token embeddings
             bigbird_model.model.shared.load_state_dict(
-                source_model.shared.state_dict()
+                source_model.model.shared.state_dict()
             )
             bigbird_model.model.encoder.embed_tokens.load_state_dict(
-                source_model.encoder.embed_tokens.state_dict()
+                source_model.model.encoder.embed_tokens.state_dict()
             ) 
 
             # Layout embeddings
@@ -415,61 +415,61 @@ def main():
             else: # MBart
                 max_position_embeddings_to_copy = _MBART_MAX_SEQ_LEN
             bigbird_model.model.encoder.embed_positions.weight[:max_position_embeddings_to_copy, :].copy_(
-                source_model.encoder.embed_positions.weight
+                source_model.model.encoder.embed_positions.weight
             )
 
             # Layer Normalization
             bigbird_model.model.encoder.layernorm_embedding.load_state_dict(
-                source_model.encoder.layer_norm.state_dict()
+                source_model.model.encoder.layer_norm.state_dict()
             )
 
             # Encoder layers
             for i in range(len(bigbird_model.model.encoder.layers)):
                 # Self-attention weights
                 self_attention_mapping = {
-                    bigbird_model.model.encoder.layers[i].self_attn.self.query: source_model.encoder.layers[i].self_attn.q_proj,
-                    bigbird_model.model.encoder.layers[i].self_attn.self.key: source_model.encoder.layers[i].self_attn.k_proj,
-                    bigbird_model.model.encoder.layers[i].self_attn.self.value: source_model.encoder.layers[i].self_attn.v_proj
+                    bigbird_model.model.encoder.layers[i].self_attn.self.query: source_model.model.encoder.layers[i].self_attn.q_proj,
+                    bigbird_model.model.encoder.layers[i].self_attn.self.key: source_model.model.encoder.layers[i].self_attn.k_proj,
+                    bigbird_model.model.encoder.layers[i].self_attn.self.value: source_model.model.encoder.layers[i].self_attn.v_proj
                 }
                 for target, origin in self_attention_mapping.items():
                     target.load_state_dict(origin.state_dict(), strict=False) # bias is set to False in BigBirdPegasusEncoderAttention.self_attn
                 bigbird_model.model.encoder.layers[i].self_attn.output.load_state_dict(
-                    source_model.encoder.layers[i].self_attn.out_proj.state_dict(), strict=False 
+                    source_model.model.encoder.layers[i].self_attn.out_proj.state_dict(), strict=False 
                 ) # bias is set to False in BigBirdPegasusEncoderAttention.self_attn
                 
                 # Layer normalization 
                 bigbird_model.model.encoder.layers[i].self_attn_layer_norm.load_state_dict(
-                    source_model.encoder.layers[i].self_attn_layer_norm.state_dict()
+                    source_model.model.encoder.layers[i].self_attn_layer_norm.state_dict()
                 )
                 # Linear layers
                 bigbird_model.model.encoder.layers[i].fc1.load_state_dict(
-                    source_model.encoder.layers[i].fc1.state_dict()
+                    source_model.model.encoder.layers[i].fc1.state_dict()
                 )
                 bigbird_model.model.encoder.layers[i].fc2.load_state_dict(
-                    source_model.encoder.layers[i].fc2.state_dict()
+                    source_model.model.encoder.layers[i].fc2.state_dict()
                 )
                 # Layer normalization 
                 bigbird_model.model.encoder.layers[i].final_layer_norm.load_state_dict(
-                    source_model.encoder.layers[i].final_layer_norm.state_dict()
+                    source_model.model.encoder.layers[i].final_layer_norm.state_dict()
                 )
 
             # Token embeddings
             bigbird_model.model.decoder.embed_tokens.load_state_dict(
-                source_model.decoder.embed_tokens.state_dict(), 
+                source_model.model.decoder.embed_tokens.state_dict(), 
             )   
             # Position embeddings
             bigbird_model.model.decoder.embed_positions.weight[:max_position_embeddings_to_copy, :].copy_(
-                source_model.decoder.embed_positions.weight
+                source_model.model.decoder.embed_positions.weight
             )
             # Layer normalization
             bigbird_model.model.decoder.layernorm_embedding.load_state_dict(
-                source_model.decoder.layer_norm.state_dict()
+                source_model.model.decoder.layer_norm.state_dict()
             )
 
             # Copy whole decoder layers (BigBirdPegasusDecoder's structure is the same as PegasusDecoder's and MBartDecoder's)
             for i in range(len(bigbird_model.model.decoder.layers)):
                 bigbird_model.model.decoder.layers[i].load_state_dict(
-                    source_model.decoder.layers[i].state_dict(), strict=False
+                    source_model.model.decoder.layers[i].state_dict(), strict=False
                 ) # Bias is set to False in BigBirdPegasusEncoderAttention.self_attn
 
             bigbird_model.lm_head.load_state_dict(
