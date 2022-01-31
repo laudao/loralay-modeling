@@ -650,7 +650,7 @@ class LayoutPegasusEncoder(LayoutPegasusPreTrainedModel):
         if inputs_embeds is None:
             inputs_embeds = self.embed_tokens(input_ids) * self.embed_scale
 
-        embed_layout = self.embed_layout(bbox)
+        embed_layout = self.embed_layout(bbox) * self.embed_scale
         embed_pos = self.embed_positions(input_shape)
 
         hidden_states = inputs_embeds + embed_layout + embed_pos
