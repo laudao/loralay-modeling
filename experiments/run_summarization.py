@@ -683,7 +683,6 @@ def main():
         for batch_index in range(len(model_inputs["input_ids"])):
             word_ids = model_inputs.word_ids(batch_index=batch_index)
             bbox = examples[bbox_column][batch_index]
-            previous_word_idx = None
             bbox_inputs = []
 
             if len(prefix) > 0:
@@ -692,11 +691,8 @@ def main():
             for word_idx in word_ids:
                 if word_idx is None:
                     bbox_inputs.append(_PADDING_BBOX)
-                elif word_idx != previous_word_idx:
-                    bbox_inputs.append(bbox[word_idx])
                 else:
                     bbox_inputs.append(bbox[word_idx])
-                previous_word_idx = word_idx
             bboxes.append(bbox_inputs)
 
         model_inputs["bbox"] = bboxes
