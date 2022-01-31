@@ -259,7 +259,25 @@ class DataTrainingArguments:
     path_to_metric: Optional[str] = field(
         default=None, metadata={"help": "Path to metric file."}
     )
-    
+    train_processed_cache_file_name: Optional[str] = field(
+        default=None, 
+        metadata={
+            "help": "The name of a path for the cache file storing the processed train dataset."
+        }
+    )
+    val_processed_cache_file_name: Optional[str] = field(
+        default=None, 
+        metadata={
+            "help": "The name of a path for the cache file storing the processed validation dataset."
+        }
+    )
+    test_processed_cache_file_name: Optional[str] = field(
+        default=None, 
+        metadata={
+            "help": "The name of a path for the cache file storing the processed test dataset."
+        }
+    )
+
     def __post_init__(self):
         if self.data_dir is None:
             raise ValueError("Need a data path.")
@@ -699,6 +717,7 @@ def main():
                 num_proc=data_args.preprocessing_num_workers,
                 remove_columns=column_names,
                 load_from_cache_file=not data_args.overwrite_cache,
+                cache_file_name=data_args.train_processed_cache_file_name,
                 desc="Running tokenizer on train dataset",
             )
 
@@ -716,6 +735,7 @@ def main():
                 num_proc=data_args.preprocessing_num_workers,
                 remove_columns=column_names,
                 load_from_cache_file=not data_args.overwrite_cache,
+                cache_file_name=data_args.val_processed_cache_file_name,
                 desc="Running tokenizer on validation dataset",
             )
 
@@ -733,6 +753,7 @@ def main():
                 num_proc=data_args.preprocessing_num_workers,
                 remove_columns=column_names,
                 load_from_cache_file=not data_args.overwrite_cache,
+                cache_file_name=data_args.test_processed_cache_file_name,
                 desc="Running tokenizer on prediction dataset",
             )
 
