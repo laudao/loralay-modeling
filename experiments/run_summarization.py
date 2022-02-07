@@ -15,6 +15,7 @@ from filelock import FileLock
 from transformers import (
     PegasusConfig,
     BigBirdPegasusConfig, 
+    LEDConfig,
     AutoTokenizer,
     MBartTokenizer,
     MBartTokenizerFast,
@@ -22,6 +23,7 @@ from transformers import (
     MBart50TokenizerFast,
     PegasusForConditionalGeneration,
     BigBirdPegasusForConditionalGeneration,
+    LEDForConditionalGeneration,
     MBartConfig,
     MBartForConditionalGeneration,
     LayoutLMModel,
@@ -45,6 +47,10 @@ import lla_summ.data.datasets.koreascience
 from lla_summ.modeling.layout_pegasus import (
     LayoutPegasusConfig,
     LayoutPegasusForConditionalGeneration
+)
+from lla_summ.modeling.layout_mbart import (
+    LayoutMBartConfig,
+    LayoutMBartForConditionalGeneration
 )
 from lla_summ.modeling.layout_bigbird_pegasus import (
     LayoutBigBirdPegasusConfig,
@@ -78,7 +84,8 @@ MODEL_CLASSES = {
     "bigbird_pegasus": (BigBirdPegasusConfig, BigBirdPegasusForConditionalGeneration),
     "layout_bigbird_pegasus": (LayoutBigBirdPegasusConfig, LayoutBigBirdPegasusForConditionalGeneration),
     "mbart": (MBartConfig, MBartForConditionalGeneration),
-    "bigbird_mbart": (BigBirdPegasusConfig, BigBirdPegasusForConditionalGeneration)
+    "layout_mbart": (LayoutMBartConfig, LayoutMBartForConditionalGeneration),
+    "led_mbart": (LEDConfig, LEDForConditionalGeneration),
 }
 
 DATASET2FILE = {
@@ -98,8 +105,6 @@ DATASET_TO_LID = {
 }
 
 _PADDING_BBOX = [0, 0, 0, 0]
-_PEGASUS_MAX_SEQ_LEN = 1024
-_MBART_MAX_SEQ_LEN = 1026
 
 MULTILINGUAL_TOKENIZERS = [MBartTokenizer, MBartTokenizerFast, MBart50Tokenizer, MBart50TokenizerFast]
 
@@ -229,6 +234,13 @@ class DataTrainingArguments:
         metadata={
             "help": "For debugging purposes or quicker training, truncate the number of prediction examples to this "
             "value if set."
+        },
+    )
+    start_idx_predict_samples: Optional[int] = field(
+        default=0,
+        metadata={
+            "help": "For debugging purposes or quicker training, index specifying at which position to start "
+            "selecting prediction examples."
         },
     )
     num_beams: Optional[int] = field(
@@ -377,9 +389,11 @@ def main():
             revision=model_args.model_revision,
             use_auth_token=True if model_args.use_auth_token else None,
         )
-        if model_args.model_type == "bigbird_mbart":
+        if model_args.model_type == "led_mbart":
+            config.architectures = ["LEDForConditionalGeneration"]
+            config.max_encoder_position_embeddings = 4096
             config.max_position_embeddings = 4096
-            config.max_length = 256
+            config.max_length = data_args.max_target_length
 
 
     tokenizer = AutoTokenizer.from_pretrained(
@@ -428,11 +442,7 @@ def main():
                     )
 
             # Position embeddings
-            if "pegasus" in model_args.model_type:
-                max_position_embeddings_to_copy = _PEGASUS_MAX_SEQ_LEN
-            else: # MBart
-                max_position_embeddings_to_copy = _MBART_MAX_SEQ_LEN
-            bigbird_model.model.encoder.embed_positions.weight[:max_position_embeddings_to_copy, :].copy_(
+            bigbird_model.model.encoder.embed_positions.weight[:source_model.config.max_position_embeddings, :].copy_(
                 source_model.model.encoder.embed_positions.weight
             )
 
@@ -476,7 +486,7 @@ def main():
                 source_model.model.decoder.embed_tokens.state_dict(), 
             )   
             # Position embeddings
-            bigbird_model.model.decoder.embed_positions.weight[:max_position_embeddings_to_copy, :].copy_(
+            bigbird_model.model.decoder.embed_positions.weight[:source_model.config.max_position_embeddings, :].copy_(
                 source_model.model.decoder.embed_positions.weight
             )
             # Layer normalization
@@ -484,7 +494,7 @@ def main():
                 source_model.model.decoder.layer_norm.state_dict()
             )
 
-            # Copy whole decoder layers (BigBirdPegasusDecoder's structure is the same as PegasusDecoder's and MBartDecoder's)
+            # Copy whole decoder layers (BigBirdPegasusDecoder's structure is the same as PegasusDecoder's)
             for i in range(len(bigbird_model.model.decoder.layers)):
                 bigbird_model.model.decoder.layers[i].load_state_dict(
                     source_model.model.decoder.layers[i].state_dict(), strict=False
@@ -495,32 +505,117 @@ def main():
             )
         
         return bigbird_model
-        
+
+
+    def load_weights_into_led():
+        led_model = LEDForConditionalGeneration(config=config)
+
+        with torch.no_grad():
+            led_model.led.shared.load_state_dict(
+                source_model.model.shared.state_dict()
+            )
+
+            # Encoder 
+            led_model.led.encoder.embed_tokens.load_state_dict(
+                source_model.model.encoder.embed_tokens.state_dict()
+            )
+            # We initialize the new position embedding matrix by repeatedly copying mBART’s 1K position embeddings 
+            for i in range(0, config.max_encoder_position_embeddings, source_model.config.max_position_embeddings):
+                led_model.led.encoder.embed_positions.weight[i: i+source_model.config.max_position_embeddings].copy_(
+                    source_model.model.encoder.embed_positions.weight[2:]
+                )
+            led_model.led.encoder.layernorm_embedding.load_state_dict(
+                source_model.model.encoder.layer_norm.state_dict()
+            )
+
+            # Encoder layers 
+            num_encoder_layers = len(led_model.led.encoder.layers)
+            for i in range(num_encoder_layers):
+                # LEDEncoderAttention 
+
+                # LEDEncoderSelfAttention (global & local)
+                led_model.led.encoder.layers[i].self_attn.longformer_self_attn.query.load_state_dict(
+                    source_model.model.encoder.layers[i].self_attn.q_proj.state_dict()
+                )
+                led_model.led.encoder.layers[i].self_attn.longformer_self_attn.key.load_state_dict(
+                    source_model.model.encoder.layers[i].self_attn.k_proj.state_dict()
+                )
+                led_model.led.encoder.layers[i].self_attn.longformer_self_attn.value.load_state_dict(
+                    source_model.model.encoder.layers[i].self_attn.v_proj.state_dict()
+                )
+                led_model.led.encoder.layers[i].self_attn.longformer_self_attn.query_global.load_state_dict(
+                    source_model.model.encoder.layers[i].self_attn.q_proj.state_dict()
+                )
+                led_model.led.encoder.layers[i].self_attn.longformer_self_attn.key_global.load_state_dict(
+                    source_model.model.encoder.layers[i].self_attn.k_proj.state_dict()
+                )
+                led_model.led.encoder.layers[i].self_attn.longformer_self_attn.value_global.load_state_dict(
+                    source_model.model.encoder.layers[i].self_attn.v_proj.state_dict()
+                )
+                led_model.led.encoder.layers[i].self_attn.output.load_state_dict(
+                    source_model.model.encoder.layers[i].self_attn.out_proj.state_dict()
+                )
+
+                led_model.led.encoder.layers[i].self_attn_layer_norm.load_state_dict(
+                    source_model.model.encoder.layers[i].self_attn_layer_norm.state_dict()
+                )
+                led_model.led.encoder.layers[i].fc1.load_state_dict(
+                    source_model.model.encoder.layers[i].fc1.state_dict()
+                )
+                led_model.led.encoder.layers[i].fc2.load_state_dict(
+                    source_model.model.encoder.layers[i].fc2.state_dict()
+                )
+                led_model.led.encoder.layers[i].final_layer_norm.load_state_dict(
+                    source_model.model.encoder.layers[i].final_layer_norm.state_dict()
+                )
+
+            # Decoder
+            led_model.led.decoder.embed_tokens.load_state_dict(
+                source_model.model.decoder.embed_tokens.state_dict()
+            )
+            led_model.led.decoder.embed_positions.weight.copy_(
+                source_model.model.decoder.embed_positions.weight[2:]
+            )
+            led_model.led.encoder.layernorm_embedding.load_state_dict(
+                source_model.model.encoder.layer_norm.state_dict()
+            )
+
+            # Decoder layers
+            num_decoder_layers = len(led_model.led.decoder.layers)
+            for i in range(num_decoder_layers):
+                led_model.led.decoder.layers[i].load_state_dict(
+                    source_model.model.decoder.layers[i].state_dict()
+                )
+
+        return led_model
+
+
     if (
-        model_args.model_type in [
-            "bigbird_pegasus", 
-            "layout_bigbird_pegasus",
-            "bigbird_mbart",
-        ]
+        model_args.model_type in ["bigbird_pegasus", "layout_bigbird_pegasus"]
         and training_args.do_train
-    ):
-        if "pegasus" in model_args.model_type:
-            source_model = PegasusForConditionalGeneration.from_pretrained(
-                model_args.model_name_or_path,
-                from_tf=bool(".ckpt" in model_args.model_name_or_path),
-                cache_dir=model_args.cache_dir,
-                revision=model_args.model_revision,
-                use_auth_token=True if model_args.use_auth_token else None,
-            )
-        else:
-            source_model = MBartForConditionalGeneration.from_pretrained(
-                model_args.model_name_or_path,
-                from_tf=bool(".ckpt" in model_args.model_name_or_path),
-                cache_dir=model_args.cache_dir,
-                revision=model_args.model_revision,
-                use_auth_token=True if model_args.use_auth_token else None,
-            )
+    ): # BigBird model
+        source_model = PegasusForConditionalGeneration.from_pretrained(
+            model_args.model_name_or_path,
+            from_tf=bool(".ckpt" in model_args.model_name_or_path),
+            cache_dir=model_args.cache_dir,
+            revision=model_args.model_revision,
+            use_auth_token=True if model_args.use_auth_token else None,
+        )
         model = load_weights_into_bigbird()
+    elif (
+        model_args.model_type in ["led_mbart"]
+        and training_args.do_train
+    ): # LED model
+        source_model = MBartForConditionalGeneration.from_pretrained(
+            model_args.model_name_or_path,
+            from_tf=bool(".ckpt" in model_args.model_name_or_path),
+            cache_dir=model_args.cache_dir,
+            revision=model_args.model_revision,
+            use_auth_token=True if model_args.use_auth_token else None,
+        )
+        model = load_weights_into_led()
+        del source_model
+        torch.cuda.empty_cache()
     elif model_args.model_type == "layoutlm":
         if training_args.do_train:
             model = EncoderDecoderModel.from_encoder_decoder_pretrained(
@@ -561,6 +656,7 @@ def main():
 
     model.config.early_stopping = True
 
+    # MBart, Layout-MBart, LED-MBart, Layout-LED-MBart
     if model.config.decoder_start_token_id is None and isinstance(tokenizer, (MBartTokenizer, MBartTokenizerFast)):
         if isinstance(tokenizer, MBartTokenizer):
             model.config.decoder_start_token_id = tokenizer.lang_code_to_id[DATASET_TO_LID[data_args.dataset_name]]
@@ -654,6 +750,7 @@ def main():
 
         if len(prefix) > 0:
             inputs = [[prefix] + inp for inp in inputs]
+            input_bboxes = [_PADDING_BBOX + inp_bbox for inp_bbox in input_bboxes]
         
         model_inputs = tokenizer(
             inputs,
@@ -684,9 +781,6 @@ def main():
             word_ids = model_inputs.word_ids(batch_index=batch_index)
             bbox = examples[bbox_column][batch_index]
             bbox_inputs = []
-
-            if len(prefix) > 0:
-                bbox_inputs.append(_PADDING_BBOX)
 
             for word_idx in word_ids:
                 if word_idx is None:
@@ -741,7 +835,13 @@ def main():
             raise ValueError("--do_predict requires a test dataset")
         predict_dataset = raw_datasets["test"]
         if data_args.max_predict_samples is not None:
-            predict_dataset = predict_dataset.select(range(data_args.max_predict_samples))
+            # predict_dataset = predict_dataset.select(range(data_args.max_predict_samples))
+            predict_dataset = predict_dataset.select(
+                range(
+                    data_args.start_idx_predict_samples, 
+                    data_args.start_idx_predict_samples + data_args.max_predict_samples
+                )
+            )
         with training_args.main_process_first(desc="prediction dataset map pre-processing"):
             predict_dataset = predict_dataset.map(
                 preprocess_function,
@@ -798,7 +898,6 @@ def main():
         result["gen_len"] = np.mean(prediction_lens)
         result = {k: round(v, 4) for k, v in result.items()}
         return result
-
 
     # Initialize our Trainer
     trainer = LLASummarizationTrainer(

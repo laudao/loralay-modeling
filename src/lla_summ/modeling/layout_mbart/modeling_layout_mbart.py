@@ -503,7 +503,7 @@ class LayoutMBartPreTrainedModel(PreTrainedModel):
                 module.weight.data[module.padding_idx].zero_()
 
     def _set_gradient_checkpointing(self, module, value=False):
-        if isinstance(module, (MBartDecoder, MBartDecoder)):
+        if isinstance(module, (LayoutMBartDecoder, LayoutMBartDecoder)):
             module.gradient_checkpointing = value
 
     @property
