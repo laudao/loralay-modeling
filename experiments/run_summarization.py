@@ -587,6 +587,10 @@ def main():
                     source_model.model.decoder.layers[i].state_dict()
                 )
 
+            led_model.lm_head.load_state_dict(
+                source_model.lm_head.state_dict()
+            )
+
         return led_model
 
 
@@ -810,6 +814,7 @@ def main():
                 cache_file_name=data_args.train_processed_cache_file_name,
                 desc="Running tokenizer on train dataset",
             )
+
 
     if training_args.do_eval:
         max_target_length = data_args.val_max_target_length
