@@ -833,13 +833,6 @@ def main():
                 desc="Running tokenizer on train dataset",
             )
 
-    print(tokenizer.convert_tokens_to_string(
-        tokenizer.convert_ids_to_tokens(train_dataset[0]["input_ids"]))
-    )
-    print(tokenizer.convert_tokens_to_string(
-        tokenizer.convert_ids_to_tokens([lab if lab != -100 else tokenizer.pad_token_id for lab in train_dataset[0]["labels"]])
-    ))
-
     if training_args.do_eval:
         max_target_length = data_args.val_max_target_length
         if "validation" not in raw_datasets:
