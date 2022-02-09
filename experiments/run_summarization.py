@@ -670,6 +670,8 @@ def main():
         model.encoder.resize_token_embeddings(len(tokenizer))
         model.decoder.resize_token_embeddings(len(tokenizer))
 
+    model.config.early_stopping = True
+
     if model.config.decoder_start_token_id is None and isinstance(tokenizer, (MBartTokenizer, MBartTokenizerFast)):
         if isinstance(tokenizer, MBartTokenizer):
             model.config.decoder_start_token_id = tokenizer.lang_code_to_id[DATASET_TO_LID[data_args.dataset_name]]
