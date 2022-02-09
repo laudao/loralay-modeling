@@ -85,6 +85,7 @@ MODEL_CLASSES = {
     "layout_bigbird_pegasus": (LayoutBigBirdPegasusConfig, LayoutBigBirdPegasusForConditionalGeneration),
     "mbart": (MBartConfig, MBartForConditionalGeneration),
     "layout_mbart": (LayoutMBartConfig, LayoutMBartForConditionalGeneration),
+    "bigbird_mbart": (BigBirdPegasusConfig, BigBirdPegasusForConditionalGeneration),
     "led_mbart": (LEDConfig, LEDForConditionalGeneration),
 }
 
@@ -394,7 +395,9 @@ def main():
             config.max_encoder_position_embeddings = 4096
             config.max_position_embeddings = 4096
             config.max_length = data_args.max_target_length
-
+        elif model_args.model_type == "bigbird_mbart":
+            config.max_position_embeddings = 4096 
+            config.max_length = data_args.max_target_length
 
     tokenizer = AutoTokenizer.from_pretrained(
         model_args.tokenizer_name if model_args.tokenizer_name else model_args.model_name_or_path,
@@ -404,11 +407,7 @@ def main():
         use_auth_token=True if model_args.use_auth_token else None,
     )
 
-    if model_args.model_type in [
-        "layoutlm",
-        "layout_pegasus",
-        "layout_bigbird_pegasus",
-    ]:
+    if "layout" in model_args.model_type:
         tokenizer.model_input_names = tokenizer.model_input_names + ["bbox"]
 
     def load_weights_into_bigbird():
@@ -443,8 +442,8 @@ def main():
 
             # Position embeddings
             bigbird_model.model.encoder.embed_positions.weight[:source_model.config.max_position_embeddings, :].copy_(
-                source_model.model.encoder.embed_positions.weight
-            )
+                source_model.model.encoder.embed_positions.weight[:source_model.config.max_position_embeddings]
+            ) 
 
             # Layer Normalization
             bigbird_model.model.encoder.layernorm_embedding.load_state_dict(
@@ -508,7 +507,7 @@ def main():
 
 
     def load_weights_into_led():
-        led_model = LEDForConditionalGeneration(config=config)
+        led_model = model_class(config=config)
 
         with torch.no_grad():
             led_model.led.shared.load_state_dict(
@@ -595,16 +594,29 @@ def main():
 
 
     if (
-        model_args.model_type in ["bigbird_pegasus", "layout_bigbird_pegasus"]
+        model_args.model_type in [
+            "bigbird_pegasus", 
+            "layout_bigbird_pegasus",
+            "bigbird_mbart",
+        ]
         and training_args.do_train
     ): # BigBird model
-        source_model = PegasusForConditionalGeneration.from_pretrained(
-            model_args.model_name_or_path,
-            from_tf=bool(".ckpt" in model_args.model_name_or_path),
-            cache_dir=model_args.cache_dir,
-            revision=model_args.model_revision,
-            use_auth_token=True if model_args.use_auth_token else None,
-        )
+        if "pegasus" in model_args.model_type:
+            source_model = PegasusForConditionalGeneration.from_pretrained(
+                model_args.model_name_or_path,
+                from_tf=bool(".ckpt" in model_args.model_name_or_path),
+                cache_dir=model_args.cache_dir,
+                revision=model_args.model_revision,
+                use_auth_token=True if model_args.use_auth_token else None,
+            )
+        else:
+            source_model = MBartForConditionalGeneration.from_pretrained(
+                model_args.model_name_or_path,
+                from_tf=bool(".ckpt" in model_args.model_name_or_path),
+                cache_dir=model_args.cache_dir,
+                revision=model_args.model_revision,
+                use_auth_token=True if model_args.use_auth_token else None,
+            )
         model = load_weights_into_bigbird()
     elif (
         model_args.model_type in ["led_mbart"]
@@ -658,9 +670,6 @@ def main():
         model.encoder.resize_token_embeddings(len(tokenizer))
         model.decoder.resize_token_embeddings(len(tokenizer))
 
-    model.config.early_stopping = True
-
-    # MBart, Layout-MBart, LED-MBart, Layout-LED-MBart
     if model.config.decoder_start_token_id is None and isinstance(tokenizer, (MBartTokenizer, MBartTokenizerFast)):
         if isinstance(tokenizer, MBartTokenizer):
             model.config.decoder_start_token_id = tokenizer.lang_code_to_id[DATASET_TO_LID[data_args.dataset_name]]
@@ -815,6 +824,12 @@ def main():
                 desc="Running tokenizer on train dataset",
             )
 
+    print(tokenizer.convert_tokens_to_string(
+        tokenizer.convert_ids_to_tokens(train_dataset[0]["input_ids"]))
+    )
+    print(tokenizer.convert_tokens_to_string(
+        tokenizer.convert_ids_to_tokens([lab if lab != -100 else tokenizer.pad_token_id for lab in train_dataset[0]["labels"]])
+    ))
 
     if training_args.do_eval:
         max_target_length = data_args.val_max_target_length
