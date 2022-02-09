@@ -440,9 +440,16 @@ def main():
                         layoutlm_model.embeddings.w_position_embeddings.state_dict()
                     )
 
+            if "pegasus" in model_args.model_type:
+                encoder_embed_positions_to_copy = source_model.model.encoder.embed_positions.weight
+                decoder_embed_positions_to_copy = source_model.model.decoder.embed_positions.weight
+            else:
+                encoder_embed_positions_to_copy = source_model.model.encoder.embed_positions.weight[2:]
+                decoder_embed_positions_to_copy = source_model.model.decoder.embed_positions.weight[2:]
+
             # Position embeddings
             bigbird_model.model.encoder.embed_positions.weight[:source_model.config.max_position_embeddings, :].copy_(
-                source_model.model.encoder.embed_positions.weight[:source_model.config.max_position_embeddings]
+                encoder_embed_positions_to_copy
             ) 
 
             # Layer Normalization
@@ -486,7 +493,7 @@ def main():
             )   
             # Position embeddings
             bigbird_model.model.decoder.embed_positions.weight[:source_model.config.max_position_embeddings, :].copy_(
-                source_model.model.decoder.embed_positions.weight
+                decoder_embed_positions_to_copy
             )
             # Layer normalization
             bigbird_model.model.decoder.layernorm_embedding.load_state_dict(
@@ -497,7 +504,7 @@ def main():
             for i in range(len(bigbird_model.model.decoder.layers)):
                 bigbird_model.model.decoder.layers[i].load_state_dict(
                     source_model.model.decoder.layers[i].state_dict(), strict=False
-                ) # Bias is set to False in BigBirdPegasusEncoderAttention.self_attn
+                ) # Bias is set to False in BigBirdPegasusDecoderAttention.self_attn
 
             bigbird_model.lm_head.load_state_dict(
                 source_model.lm_head.state_dict()
@@ -575,8 +582,8 @@ def main():
             led_model.led.decoder.embed_positions.weight.copy_(
                 source_model.model.decoder.embed_positions.weight[2:]
             )
-            led_model.led.encoder.layernorm_embedding.load_state_dict(
-                source_model.model.encoder.layer_norm.state_dict()
+            led_model.led.decoder.layernorm_embedding.load_state_dict(
+                source_model.model.decoder.layer_norm.state_dict()
             )
 
             # Decoder layers
