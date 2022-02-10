@@ -25,13 +25,13 @@ class SciELOSummarizationDataset(datasets.GeneratorBasedBuilder):
     
     BUILDER_CONFIGS = [
         SciELOSummarizationConfig(
-            name="document",
+            name="scielo_es",
             version=datasets.Version("1.0.0"),
             description="SciELO dataset for summarization",
             lang="es",
         ),
         SciELOSummarizationConfig(
-            name="document",
+            name="scielo_pt",
             version=datasets.Version("1.0.0"),
             description="SciELO dataset for summarization",
             lang="pt",

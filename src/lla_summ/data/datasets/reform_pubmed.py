@@ -24,11 +24,12 @@ class ReformPubMedSummarizationDataset(datasets.GeneratorBasedBuilder):
     
     BUILDER_CONFIGS = [
         ReformPubMedSummarizationConfig(
-            name="document",
+            name="reform_pubmed",
             version=datasets.Version("1.0.0"),
             description="Reformulated PubMed dataset for summarization",
         ),
     ]
+    DEFAULT_WRITER_BATCH_SIZE = 2500
 
     def _info(self):
         # Should return a datasets.DatasetInfo object

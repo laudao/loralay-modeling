@@ -24,7 +24,7 @@ class HALSummarizationDataset(datasets.GeneratorBasedBuilder):
     
     BUILDER_CONFIGS = [
         HALSummarizationConfig(
-            name="document",
+            name="hal",
             version=datasets.Version("1.0.0"),
             description="HAL dataset for summarization",
         ),

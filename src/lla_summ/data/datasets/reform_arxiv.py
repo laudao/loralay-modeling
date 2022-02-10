@@ -25,7 +25,7 @@ class ReformArxivSummarizationDataset(datasets.GeneratorBasedBuilder):
     
     BUILDER_CONFIGS = [
         ReformArxivSummarizationConfig(
-            name="document",
+            name="reform_arxiv",
             version=datasets.Version("1.0.0"),
             description="Reformulated arXiv dataset for summarization",
         ),

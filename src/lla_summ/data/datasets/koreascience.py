@@ -24,7 +24,7 @@ class KoreaScienceSummarizationDataset(datasets.GeneratorBasedBuilder):
     
     BUILDER_CONFIGS = [
         KoreaScienceSummarizationConfig(
-            name="document",
+            name="koreascience",
             version=datasets.Version("1.0.0"),
             description="KoreaScience dataset for summarization",
         ),
