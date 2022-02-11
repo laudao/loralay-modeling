@@ -398,6 +398,8 @@ def main():
         elif model_args.model_type == "bigbird_mbart":
             config.max_position_embeddings = 4096 
             config.max_length = data_args.max_target_length
+        elif model_args.model_type == "mbart":
+            config.max_length = data_args.max_target_length
 
     tokenizer = AutoTokenizer.from_pretrained(
         model_args.tokenizer_name if model_args.tokenizer_name else model_args.model_name_or_path,
@@ -710,6 +712,7 @@ def main():
 
 
     logger.info(f"Number of parameters: {sum(p.numel() for p in model.parameters())}")
+    logger.info(model.config)
 
     if training_args.gradient_checkpointing:
         model.config.use_cache = False
@@ -874,6 +877,13 @@ def main():
                 cache_file_name=data_args.test_processed_cache_file_name,
                 desc="Running tokenizer on prediction dataset",
             )
+
+    if data_args.dataset_name == "hal":
+        if model_args.model_type in ["mbart", "layout-mbart"]:
+            model.config.num_beams = 8
+        elif model_args.model_type in ["bigbird-mbart", "layout-bigbird-mbart"]:
+            model.config.num_beams = 5
+        model.config.length_penalty = 0.8
 
     # Data collator
     label_pad_token_id = -100 if data_args.ignore_pad_token_for_loss else tokenizer.pad_token_id
