@@ -86,6 +86,7 @@ MODEL_CLASSES = {
     "mbart": (MBartConfig, MBartForConditionalGeneration),
     "layout_mbart": (LayoutMBartConfig, LayoutMBartForConditionalGeneration),
     "bigbird_mbart": (BigBirdPegasusConfig, BigBirdPegasusForConditionalGeneration),
+    "layout_bigbird_mbart": (LayoutBigBirdPegasusConfig, LayoutBigBirdPegasusForConditionalGeneration),
     "led_mbart": (LEDConfig, LEDForConditionalGeneration),
 }
 
@@ -395,7 +396,7 @@ def main():
             config.max_encoder_position_embeddings = 4096
             config.max_position_embeddings = 4096
             config.max_length = data_args.max_target_length
-        elif model_args.model_type == "bigbird_mbart":
+        elif model_args.model_type == "bigbird_mbart" or model_args.model_type == "layout_bigbird_mbart":
             config.max_position_embeddings = 4096 
             config.max_length = data_args.max_target_length
         elif model_args.model_type == "mbart":
@@ -607,6 +608,7 @@ def main():
             "bigbird_pegasus", 
             "layout_bigbird_pegasus",
             "bigbird_mbart",
+            "layout_bigbird_mbart",
         ]
         and training_args.do_train
     ): # BigBird model
@@ -627,6 +629,8 @@ def main():
                 use_auth_token=True if model_args.use_auth_token else None,
             )
         model = load_weights_into_bigbird()
+        del source_model 
+        torch.cuda.empty_cache()
     elif (
         model_args.model_type in ["led_mbart"]
         and training_args.do_train
@@ -877,6 +881,7 @@ def main():
                 cache_file_name=data_args.test_processed_cache_file_name,
                 desc="Running tokenizer on prediction dataset",
             )
+
 
     if data_args.dataset_name == "hal":
         if model_args.model_type in ["mbart", "layout-mbart"]:
