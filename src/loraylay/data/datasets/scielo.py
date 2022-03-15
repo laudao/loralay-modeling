@@ -10,26 +10,35 @@ _ARTICLE_BBOXES = "article_bboxes"
 _ARTICLE_NORM_BBOXES = "article_norm_bboxes"
 _ABSTRACT = "abstract"
 
-
-class ReformArxivSummarizationConfig(datasets.BuilderConfig):
-    """BuilderConfig for ReformArxivSummarization."""
-    def __init__(self, **kwargs):
-        """BuilderConfig for ArxivSummarization.
+class SciELOSummarizationConfig(datasets.BuilderConfig):
+    """BuilderConfig for SciELOSummarization."""
+    def __init__(self, lang, **kwargs):
+        """BuilderConfig for SciELOSummarization.
         Args:
           **kwargs: keyword arguments forwarded to super.
         """
-        super(ReformArxivSummarizationConfig, self).__init__(**kwargs)
+        super(SciELOSummarizationConfig, self).__init__(**kwargs)
+        self.lang = lang
 
-class ReformArxivSummarizationDataset(datasets.GeneratorBasedBuilder):
-    """ArxivSummarization Dataset."""
+class SciELOSummarizationDataset(datasets.GeneratorBasedBuilder):
+    """SciELOSummarization Dataset."""
     
     BUILDER_CONFIGS = [
-        ReformArxivSummarizationConfig(
-            name="reform_arxiv",
+        SciELOSummarizationConfig(
+            name="scielo_es",
             version=datasets.Version("1.0.0"),
-            description="Reformulated arXiv dataset for summarization",
+            description="SciELO dataset for summarization",
+            lang="es",
+        ),
+        SciELOSummarizationConfig(
+            name="scielo_pt",
+            version=datasets.Version("1.0.0"),
+            description="SciELO dataset for summarization",
+            lang="pt",
         ),
     ]
+
+    DEFAULT_WRITER_BATCH_SIZE = 5000
 
     def _info(self):
         # Should return a datasets.DatasetInfo object
@@ -72,7 +81,7 @@ class ReformArxivSummarizationDataset(datasets.GeneratorBasedBuilder):
 
     
     def _generate_examples(self, data_path, abstract_path):
-        """Generate ReformArxivSummarization examples."""
+        """Generate SciELOSummarization examples."""
         filenames = sorted(os.listdir(data_path))
 
         guid = 0

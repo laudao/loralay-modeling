@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 from setuptools import find_packages, setup
 setup(
-    name="lla_summ",
+    name="loralay",
     version="0.1.1",
     description="",
     package_dir={"": "src"},

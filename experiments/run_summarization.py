@@ -26,7 +26,6 @@ from transformers import (
     LEDForConditionalGeneration,
     MBartConfig,
     MBartForConditionalGeneration,
-    LayoutLMModel,
     DataCollatorForSeq2Seq,
     HfArgumentParser,
     set_seed,
@@ -36,29 +35,25 @@ from transformers.trainer_utils import get_last_checkpoint
 from transformers.utils import check_min_version
 from transformers.utils.versions import require_version
 
-from lla_summ.training.trainers import LLASummarizationTrainer
-from lla_summ.training.training_args_llasumm import LLASummarizationTrainingArguments
+from loraylay.training.trainers import LLASummarizationTrainer
+from loraylay.training.training_args_llasumm import LLASummarizationTrainingArguments
 
-import lla_summ.data.datasets.reform_pubmed
-import lla_summ.data.datasets.reform_arxiv
-import lla_summ.data.datasets.hal 
-import lla_summ.data.datasets.scielo
-import lla_summ.data.datasets.koreascience 
-from lla_summ.modeling.layout_pegasus import (
+import loraylay.data.datasets.reform_pubmed
+import loraylay.data.datasets.reform_arxiv
+import loraylay.data.datasets.hal 
+import loraylay.data.datasets.scielo
+import loraylay.data.datasets.koreascience 
+from loraylay.modeling.layout_pegasus import (
     LayoutPegasusConfig,
     LayoutPegasusForConditionalGeneration
 )
-from lla_summ.modeling.layout_mbart import (
+from loraylay.modeling.layout_mbart import (
     LayoutMBartConfig,
     LayoutMBartForConditionalGeneration
 )
-from lla_summ.modeling.layout_bigbird_pegasus import (
+from loraylay.modeling.layout_bigbird_pegasus import (
     LayoutBigBirdPegasusConfig,
     LayoutBigBirdPegasusForConditionalGeneration
-)
-from lla_summ.modeling.encoder_decoder import (
-    EncoderDecoderConfig,
-    EncoderDecoderModel,
 )
 
 require_version("datasets>=1.8.0", "To fix: pip install -r examples/pytorch/summarization/requirements.txt")
@@ -78,7 +73,6 @@ except (LookupError, OSError):
 
 
 MODEL_CLASSES = {
-    "layoutlm": (EncoderDecoderConfig, EncoderDecoderModel),
     "pegasus": (PegasusConfig, PegasusForConditionalGeneration),
     "layout_pegasus": (LayoutPegasusConfig, LayoutPegasusForConditionalGeneration),
     "bigbird_pegasus": (BigBirdPegasusConfig, BigBirdPegasusForConditionalGeneration),
@@ -91,12 +85,12 @@ MODEL_CLASSES = {
 }
 
 DATASET2FILE = {
-    "reform_pubmed": lla_summ.data.datasets.reform_pubmed.__file__,
-    "reform_arxiv": lla_summ.data.datasets.reform_arxiv.__file__,
-    "hal": lla_summ.data.datasets.hal.__file__,
-    "scielo_es": lla_summ.data.datasets.scielo.__file__,
-    "scielo_pt": lla_summ.data.datasets.scielo.__file__,
-    "koreascience": lla_summ.data.datasets.koreascience.__file__,
+    "reform_pubmed": loraylay.data.datasets.reform_pubmed.__file__,
+    "reform_arxiv": loraylay.data.datasets.reform_arxiv.__file__,
+    "hal": loraylay.data.datasets.hal.__file__,
+    "scielo_es": loraylay.data.datasets.scielo.__file__,
+    "scielo_pt": loraylay.data.datasets.scielo.__file__,
+    "koreascience": loraylay.data.datasets.koreascience.__file__,
 }
 
 DATASET_TO_LID = {
@@ -130,9 +124,6 @@ class ModelArguments:
     )
     model_name_or_path_for_layout: Optional[str] = field(
         default=None, metadata={"help": "If `model_type` = layout-bigbird-pegasus, path to pretrained model or model identifier from huggingface.co/models, used to initialize the layout embeddings."}
-    )
-    decoder_model_name_or_path: Optional[str] = field(
-        default=None, metadata={"help": "If `model_type` = layoutlm, path to pretrained model or model identifier from huggingface.co/models, used to initialize the decoder model."}
     )
     cache_dir: Optional[str] = field(
         default=None,
@@ -384,23 +375,17 @@ def main():
 
     config_class, model_class = MODEL_CLASSES[model_args.model_type]
 
-    if model_args.model_type != "layoutlm":
-        config = config_class.from_pretrained(
-            model_args.config_name if model_args.config_name else model_args.model_name_or_path,
-            cache_dir=model_args.cache_dir,
-            revision=model_args.model_revision,
-            use_auth_token=True if model_args.use_auth_token else None,
-        )
-        if model_args.model_type == "led_mbart":
-            config.architectures = ["LEDForConditionalGeneration"]
-            config.max_encoder_position_embeddings = 4096
-            config.max_position_embeddings = 4096
-            config.max_length = data_args.max_target_length
-        elif model_args.model_type == "bigbird_mbart" or model_args.model_type == "layout_bigbird_mbart":
-            config.max_position_embeddings = 4096 
-            config.max_length = data_args.max_target_length
-        elif model_args.model_type == "mbart":
-            config.max_length = data_args.max_target_length
+    config = config_class.from_pretrained(
+        model_args.config_name if model_args.config_name else model_args.model_name_or_path,
+        cache_dir=model_args.cache_dir,
+        revision=model_args.model_revision,
+        use_auth_token=True if model_args.use_auth_token else None,
+    )
+    if model_args.model_type == "bigbird_mbart" or model_args.model_type == "layout_bigbird_mbart":
+        config.max_position_embeddings = 4096 
+        config.max_length = data_args.max_target_length
+    elif model_args.model_type == "mbart":
+        config.max_length = data_args.max_target_length
 
     tokenizer = AutoTokenizer.from_pretrained(
         model_args.tokenizer_name if model_args.tokenizer_name else model_args.model_name_or_path,
@@ -424,24 +409,6 @@ def main():
             bigbird_model.model.encoder.embed_tokens.load_state_dict(
                 source_model.model.encoder.embed_tokens.state_dict()
             ) 
-
-            # Layout embeddings
-            if model_args.model_type.startswith("layout_bigbird"):
-                if model_args.model_name_or_path_for_layout:
-                    layoutlm_model = LayoutLMModel.from_pretrained(model_args.model_name_or_path_for_layout)
-
-                    bigbird_model.model.encoder.embed_layout.x_position_embeddings.load_state_dict(
-                        layoutlm_model.embeddings.x_position_embeddings.state_dict()
-                    )
-                    bigbird_model.model.encoder.embed_layout.y_position_embeddings.load_state_dict(
-                        layoutlm_model.embeddings.y_position_embeddings.state_dict()
-                    )
-                    bigbird_model.model.encoder.embed_layout.h_position_embeddings.load_state_dict(
-                        layoutlm_model.embeddings.h_position_embeddings.state_dict()
-                    )
-                    bigbird_model.model.encoder.embed_layout.w_position_embeddings.load_state_dict(
-                        layoutlm_model.embeddings.w_position_embeddings.state_dict()
-                    )
 
             if "pegasus" in model_args.model_type:
                 encoder_embed_positions_to_copy = source_model.model.encoder.embed_positions.weight
@@ -645,29 +612,6 @@ def main():
         model = load_weights_into_led()
         del source_model
         torch.cuda.empty_cache()
-    elif model_args.model_type == "layoutlm":
-        if training_args.do_train:
-            model = EncoderDecoderModel.from_encoder_decoder_pretrained(
-                model_args.model_name_or_path, 
-                model_args.decoder_model_name_or_path,
-                from_tf=bool(".ckpt" in model_args.model_name_or_path),
-                cache_dir=model_args.cache_dir,
-                revision=model_args.model_revision,
-                use_auth_token=True if model_args.use_auth_token else None,
-            )
-            # Define all the relevant parameters used for beam search decoding
-            model.config.decoder_start_token_id = tokenizer.cls_token_id
-            model.config.eos_token_id = tokenizer.sep_token_id
-            model.config.pad_token_id = tokenizer.pad_token_id
-            model.config.vocab_size = model.config.encoder.vocab_size
-        else:
-            model = EncoderDecoderModel.from_pretrained(
-                model_args.model_name_or_path,
-                from_tf=bool(".ckpt" in model_args.model_name_or_path),
-                cache_dir=model_args.cache_dir,
-                revision=model_args.model_revision,
-                use_auth_token=True if model_args.use_auth_token else None,
-            )
     else:
         model = model_class.from_pretrained(
             model_args.model_name_or_path,
@@ -677,12 +621,8 @@ def main():
             use_auth_token=True if model_args.use_auth_token else None,
         )
     
-    if model.config.model_type != "encoder-decoder":
-        model.resize_token_embeddings(len(tokenizer))
-    else:
-        model.encoder.resize_token_embeddings(len(tokenizer))
-        model.decoder.resize_token_embeddings(len(tokenizer))
-
+    model.resize_token_embeddings(len(tokenizer))
+    
     model.config.early_stopping = True
 
     if model.config.decoder_start_token_id is None and isinstance(tokenizer, (MBartTokenizer, MBartTokenizerFast)):
@@ -720,11 +660,7 @@ def main():
 
     if training_args.gradient_checkpointing:
         model.config.use_cache = False
-        if model.config.model_type == "encoder-decoder":
-            model.encoder.gradient_checkpointing = True
-            model.decoder.gradient_checkpointing = True
-            training_args.gradient_checkpointing = False
-
+        
     prefix = data_args.source_prefix if data_args.source_prefix is not None else ""
 
     # Preprocessing the datasets.

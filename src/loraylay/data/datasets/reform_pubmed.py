@@ -49,18 +49,18 @@ class ReformPubMedSummarizationDataset(datasets.GeneratorBasedBuilder):
     def _split_generators(self, dl_manager):
         data_dir = dl_manager.manual_dir
         return [
-            datasets.SplitGenerator(
-                name=datasets.Split.TRAIN, gen_kwargs={
-                    "data_path": os.path.join(data_dir, "train"),
-                    "abstract_path": os.path.join(data_dir, "train_abstracts.txt")
-                }
-            ),
-            datasets.SplitGenerator(
-                name=datasets.Split.VALIDATION, gen_kwargs={
-                    "data_path": os.path.join(data_dir, "val"),
-                    "abstract_path": os.path.join(data_dir, "val_abstracts.txt")
-                }
-            ),
+            # datasets.SplitGenerator(
+            #     name=datasets.Split.TRAIN, gen_kwargs={
+            #         "data_path": os.path.join(data_dir, "train"),
+            #         "abstract_path": os.path.join(data_dir, "train_abstracts.txt")
+            #     }
+            # ),
+            # datasets.SplitGenerator(
+            #     name=datasets.Split.VALIDATION, gen_kwargs={
+            #         "data_path": os.path.join(data_dir, "val"),
+            #         "abstract_path": os.path.join(data_dir, "val_abstracts.txt")
+            #     }
+            # ),
             datasets.SplitGenerator(
                 name=datasets.Split.TEST, gen_kwargs={
                     "data_path": os.path.join(data_dir, "test"),

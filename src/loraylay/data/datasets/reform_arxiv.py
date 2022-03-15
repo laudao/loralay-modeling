@@ -10,33 +10,27 @@ _ARTICLE_BBOXES = "article_bboxes"
 _ARTICLE_NORM_BBOXES = "article_norm_bboxes"
 _ABSTRACT = "abstract"
 
-class SciELOSummarizationConfig(datasets.BuilderConfig):
-    """BuilderConfig for SciELOSummarization."""
-    def __init__(self, lang, **kwargs):
-        """BuilderConfig for SciELOSummarization.
+
+class ReformArxivSummarizationConfig(datasets.BuilderConfig):
+    """BuilderConfig for ReformArxivSummarization."""
+    def __init__(self, **kwargs):
+        """BuilderConfig for ArxivSummarization.
         Args:
           **kwargs: keyword arguments forwarded to super.
         """
-        super(SciELOSummarizationConfig, self).__init__(**kwargs)
-        self.lang = lang
+        super(ReformArxivSummarizationConfig, self).__init__(**kwargs)
 
-class SciELOSummarizationDataset(datasets.GeneratorBasedBuilder):
-    """SciELOSummarization Dataset."""
+class ReformArxivSummarizationDataset(datasets.GeneratorBasedBuilder):
+    """ArxivSummarization Dataset."""
     
     BUILDER_CONFIGS = [
-        SciELOSummarizationConfig(
-            name="scielo_es",
+        ReformArxivSummarizationConfig(
+            name="reform_arxiv",
             version=datasets.Version("1.0.0"),
-            description="SciELO dataset for summarization",
-            lang="es",
-        ),
-        SciELOSummarizationConfig(
-            name="scielo_pt",
-            version=datasets.Version("1.0.0"),
-            description="SciELO dataset for summarization",
-            lang="pt",
+            description="Reformulated arXiv dataset for summarization",
         ),
     ]
+    DEFAULT_WRITER_BATCH_SIZE = 1000
 
     def _info(self):
         # Should return a datasets.DatasetInfo object
@@ -56,18 +50,18 @@ class SciELOSummarizationDataset(datasets.GeneratorBasedBuilder):
     def _split_generators(self, dl_manager):
         data_dir = dl_manager.manual_dir
         return [
-            datasets.SplitGenerator(
-                name=datasets.Split.TRAIN, gen_kwargs={
-                    "data_path": os.path.join(data_dir, "train"),
-                    "abstract_path": os.path.join(data_dir, "train_abstracts.txt")
-                }
-            ),
-            datasets.SplitGenerator(
-                name=datasets.Split.VALIDATION, gen_kwargs={
-                    "data_path": os.path.join(data_dir, "val"),
-                    "abstract_path": os.path.join(data_dir, "val_abstracts.txt")
-                }
-            ),
+            # datasets.SplitGenerator(
+            #     name=datasets.Split.TRAIN, gen_kwargs={
+            #         "data_path": os.path.join(data_dir, "train"),
+            #         "abstract_path": os.path.join(data_dir, "train_abstracts.txt")
+            #     }
+            # ),
+            # datasets.SplitGenerator(
+            #     name=datasets.Split.VALIDATION, gen_kwargs={
+            #         "data_path": os.path.join(data_dir, "val"),
+            #         "abstract_path": os.path.join(data_dir, "val_abstracts.txt")
+            #     }
+            # ),
             datasets.SplitGenerator(
                 name=datasets.Split.TEST, gen_kwargs={
                     "data_path": os.path.join(data_dir, "test"),
@@ -79,7 +73,7 @@ class SciELOSummarizationDataset(datasets.GeneratorBasedBuilder):
 
     
     def _generate_examples(self, data_path, abstract_path):
-        """Generate SciELOSummarization examples."""
+        """Generate ReformArxivSummarization examples."""
         filenames = sorted(os.listdir(data_path))
 
         guid = 0
