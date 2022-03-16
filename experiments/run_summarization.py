@@ -15,7 +15,6 @@ from filelock import FileLock
 from transformers import (
     PegasusConfig,
     BigBirdPegasusConfig, 
-    LEDConfig,
     AutoTokenizer,
     MBartTokenizer,
     MBartTokenizerFast,
@@ -23,7 +22,6 @@ from transformers import (
     MBart50TokenizerFast,
     PegasusForConditionalGeneration,
     BigBirdPegasusForConditionalGeneration,
-    LEDForConditionalGeneration,
     MBartConfig,
     MBartForConditionalGeneration,
     DataCollatorForSeq2Seq,
@@ -35,23 +33,23 @@ from transformers.trainer_utils import get_last_checkpoint
 from transformers.utils import check_min_version
 from transformers.utils.versions import require_version
 
-from loraylay.training.trainers import LLASummarizationTrainer
-from loraylay.training.training_args_llasumm import LLASummarizationTrainingArguments
+from loralay.training.trainers import LLASummarizationTrainer
+from loralay.training.training_args_llasumm import LLASummarizationTrainingArguments
 
-import loraylay.data.datasets.reform_pubmed
-import loraylay.data.datasets.reform_arxiv
-import loraylay.data.datasets.hal 
-import loraylay.data.datasets.scielo
-import loraylay.data.datasets.koreascience 
-from loraylay.modeling.layout_pegasus import (
+import loralay.data.datasets.pubmed_lay
+import loralay.data.datasets.arxiv_lay
+import loralay.data.datasets.hal 
+import loralay.data.datasets.scielo
+import loralay.data.datasets.koreascience 
+from loralay.modeling.layout_pegasus import (
     LayoutPegasusConfig,
     LayoutPegasusForConditionalGeneration
 )
-from loraylay.modeling.layout_mbart import (
+from loralay.modeling.layout_mbart import (
     LayoutMBartConfig,
     LayoutMBartForConditionalGeneration
 )
-from loraylay.modeling.layout_bigbird_pegasus import (
+from loralay.modeling.layout_bigbird_pegasus import (
     LayoutBigBirdPegasusConfig,
     LayoutBigBirdPegasusForConditionalGeneration
 )
@@ -81,16 +79,15 @@ MODEL_CLASSES = {
     "layout_mbart": (LayoutMBartConfig, LayoutMBartForConditionalGeneration),
     "bigbird_mbart": (BigBirdPegasusConfig, BigBirdPegasusForConditionalGeneration),
     "layout_bigbird_mbart": (LayoutBigBirdPegasusConfig, LayoutBigBirdPegasusForConditionalGeneration),
-    "led_mbart": (LEDConfig, LEDForConditionalGeneration),
 }
 
 DATASET2FILE = {
-    "reform_pubmed": loraylay.data.datasets.reform_pubmed.__file__,
-    "reform_arxiv": loraylay.data.datasets.reform_arxiv.__file__,
-    "hal": loraylay.data.datasets.hal.__file__,
-    "scielo_es": loraylay.data.datasets.scielo.__file__,
-    "scielo_pt": loraylay.data.datasets.scielo.__file__,
-    "koreascience": loraylay.data.datasets.koreascience.__file__,
+    "pubmed_lay": loralay.data.datasets.pubmed_lay.__file__,
+    "arxiv_lay": loralay.data.datasets.arxiv_lay.__file__,
+    "hal": loralay.data.datasets.hal.__file__,
+    "scielo_es": loralay.data.datasets.scielo.__file__,
+    "scielo_pt": loralay.data.datasets.scielo.__file__,
+    "koreascience": loralay.data.datasets.koreascience.__file__,
 }
 
 DATASET_TO_LID = {
@@ -483,93 +480,6 @@ def main():
         return bigbird_model
 
 
-    def load_weights_into_led():
-        led_model = model_class(config=config)
-
-        with torch.no_grad():
-            led_model.led.shared.load_state_dict(
-                source_model.model.shared.state_dict()
-            )
-
-            # Encoder 
-            led_model.led.encoder.embed_tokens.load_state_dict(
-                source_model.model.encoder.embed_tokens.state_dict()
-            )
-            # We initialize the new position embedding matrix by repeatedly copying mBART’s 1K position embeddings 
-            for i in range(0, config.max_encoder_position_embeddings, source_model.config.max_position_embeddings):
-                led_model.led.encoder.embed_positions.weight[i: i+source_model.config.max_position_embeddings].copy_(
-                    source_model.model.encoder.embed_positions.weight[2:]
-                )
-            led_model.led.encoder.layernorm_embedding.load_state_dict(
-                source_model.model.encoder.layer_norm.state_dict()
-            )
-
-            # Encoder layers 
-            num_encoder_layers = len(led_model.led.encoder.layers)
-            for i in range(num_encoder_layers):
-                # LEDEncoderAttention 
-
-                # LEDEncoderSelfAttention (global & local)
-                led_model.led.encoder.layers[i].self_attn.longformer_self_attn.query.load_state_dict(
-                    source_model.model.encoder.layers[i].self_attn.q_proj.state_dict()
-                )
-                led_model.led.encoder.layers[i].self_attn.longformer_self_attn.key.load_state_dict(
-                    source_model.model.encoder.layers[i].self_attn.k_proj.state_dict()
-                )
-                led_model.led.encoder.layers[i].self_attn.longformer_self_attn.value.load_state_dict(
-                    source_model.model.encoder.layers[i].self_attn.v_proj.state_dict()
-                )
-                led_model.led.encoder.layers[i].self_attn.longformer_self_attn.query_global.load_state_dict(
-                    source_model.model.encoder.layers[i].self_attn.q_proj.state_dict()
-                )
-                led_model.led.encoder.layers[i].self_attn.longformer_self_attn.key_global.load_state_dict(
-                    source_model.model.encoder.layers[i].self_attn.k_proj.state_dict()
-                )
-                led_model.led.encoder.layers[i].self_attn.longformer_self_attn.value_global.load_state_dict(
-                    source_model.model.encoder.layers[i].self_attn.v_proj.state_dict()
-                )
-                led_model.led.encoder.layers[i].self_attn.output.load_state_dict(
-                    source_model.model.encoder.layers[i].self_attn.out_proj.state_dict()
-                )
-
-                led_model.led.encoder.layers[i].self_attn_layer_norm.load_state_dict(
-                    source_model.model.encoder.layers[i].self_attn_layer_norm.state_dict()
-                )
-                led_model.led.encoder.layers[i].fc1.load_state_dict(
-                    source_model.model.encoder.layers[i].fc1.state_dict()
-                )
-                led_model.led.encoder.layers[i].fc2.load_state_dict(
-                    source_model.model.encoder.layers[i].fc2.state_dict()
-                )
-                led_model.led.encoder.layers[i].final_layer_norm.load_state_dict(
-                    source_model.model.encoder.layers[i].final_layer_norm.state_dict()
-                )
-
-            # Decoder
-            led_model.led.decoder.embed_tokens.load_state_dict(
-                source_model.model.decoder.embed_tokens.state_dict()
-            )
-            led_model.led.decoder.embed_positions.weight.copy_(
-                source_model.model.decoder.embed_positions.weight[2:]
-            )
-            led_model.led.decoder.layernorm_embedding.load_state_dict(
-                source_model.model.decoder.layer_norm.state_dict()
-            )
-
-            # Decoder layers
-            num_decoder_layers = len(led_model.led.decoder.layers)
-            for i in range(num_decoder_layers):
-                led_model.led.decoder.layers[i].load_state_dict(
-                    source_model.model.decoder.layers[i].state_dict()
-                )
-
-            led_model.lm_head.load_state_dict(
-                source_model.lm_head.state_dict()
-            )
-
-        return led_model
-
-
     if (
         model_args.model_type in [
             "bigbird_pegasus", 
@@ -597,20 +507,6 @@ def main():
             )
         model = load_weights_into_bigbird()
         del source_model 
-        torch.cuda.empty_cache()
-    elif (
-        model_args.model_type in ["led_mbart"]
-        and training_args.do_train
-    ): # LED model
-        source_model = MBartForConditionalGeneration.from_pretrained(
-            model_args.model_name_or_path,
-            from_tf=bool(".ckpt" in model_args.model_name_or_path),
-            cache_dir=model_args.cache_dir,
-            revision=model_args.model_revision,
-            use_auth_token=True if model_args.use_auth_token else None,
-        )
-        model = load_weights_into_led()
-        del source_model
         torch.cuda.empty_cache()
     else:
         model = model_class.from_pretrained(

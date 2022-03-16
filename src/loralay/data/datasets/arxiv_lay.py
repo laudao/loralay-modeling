@@ -2,7 +2,7 @@ import json
 import os
 import datasets
 from tqdm import tqdm
-from lla_summ.data.utils import normalize_bbox
+from loraylay.data.utils import normalize_bbox
 
 _ARTICLE_ID = "article_id"
 _ARTICLE_WORDS = "article_words"
