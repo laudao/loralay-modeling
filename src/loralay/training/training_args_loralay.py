@@ -7,7 +7,7 @@ from transformers import Seq2SeqTrainingArguments
 logger = logging.getLogger(__name__)
 
 @dataclass
-class LLASummarizationTrainingArguments(Seq2SeqTrainingArguments):
+class LoRaLaySummarizationTrainingArguments(Seq2SeqTrainingArguments):
     """
     lr_end (`float`, *optional*, defaults to 1e-7):
         The end LR for polynomial learning rate decay..

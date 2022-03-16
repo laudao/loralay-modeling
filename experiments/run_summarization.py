@@ -34,7 +34,7 @@ from transformers.utils import check_min_version
 from transformers.utils.versions import require_version
 
 from loralay.training.trainers import LLASummarizationTrainer
-from loralay.training.training_args_llasumm import LLASummarizationTrainingArguments
+from loralay.training.training_args_loralay import LoRaLaySummarizationTrainingArguments
 
 import loralay.data.datasets.pubmed_lay
 import loralay.data.datasets.arxiv_lay
@@ -292,7 +292,7 @@ def main():
     # or by passing the --help flag to this script.
     # We now keep distinct sets of args, for a cleaner separation of concerns.
 
-    parser = HfArgumentParser((ModelArguments, DataTrainingArguments, LLASummarizationTrainingArguments))
+    parser = HfArgumentParser((ModelArguments, DataTrainingArguments, LoRaLaySummarizationTrainingArguments))
     if len(sys.argv) == 2 and sys.argv[1].endswith(".json"):
         # If we pass only one argument to the script and it's the path to a json file,
         # let's parse it to get our arguments.
