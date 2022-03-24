@@ -11,21 +11,21 @@ _ARTICLE_NORM_BBOXES = "article_norm_bboxes"
 _ABSTRACT = "abstract"
 
 
-class ReformArxivSummarizationConfig(datasets.BuilderConfig):
-    """BuilderConfig for ReformArxivSummarization."""
+class ArxivLaySummarizationConfig(datasets.BuilderConfig):
+    """BuilderConfig for ArxivLaySummarization."""
     def __init__(self, **kwargs):
         """BuilderConfig for ArxivSummarization.
         Args:
           **kwargs: keyword arguments forwarded to super.
         """
-        super(ReformArxivSummarizationConfig, self).__init__(**kwargs)
+        super(ArxivLaySummarizationConfig, self).__init__(**kwargs)
 
-class ReformArxivSummarizationDataset(datasets.GeneratorBasedBuilder):
+class ArxivLaySummarizationDataset(datasets.GeneratorBasedBuilder):
     """ArxivSummarization Dataset."""
     
     BUILDER_CONFIGS = [
-        ReformArxivSummarizationConfig(
-            name="reform_arxiv",
+        ArxivLaySummarizationConfig(
+            name="arxiv_lay",
             version=datasets.Version("1.0.0"),
             description="Reformulated arXiv dataset for summarization",
         ),
@@ -73,7 +73,7 @@ class ReformArxivSummarizationDataset(datasets.GeneratorBasedBuilder):
 
     
     def _generate_examples(self, data_path, abstract_path):
-        """Generate ReformArxivSummarization examples."""
+        """Generate ArxivLaySummarization examples."""
         filenames = sorted(os.listdir(data_path))
 
         guid = 0

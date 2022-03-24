@@ -10,21 +10,21 @@ _ARTICLE_BBOXES = "article_bboxes"
 _ARTICLE_NORM_BBOXES = "article_norm_bboxes"
 _ABSTRACT = "abstract"
 
-class ReformPubMedSummarizationConfig(datasets.BuilderConfig):
-    """BuilderConfig for ReformPubMedSummarization."""
+class PubMedLaySummarizationConfig(datasets.BuilderConfig):
+    """BuilderConfig for PubMedLaySummarization."""
     def __init__(self, **kwargs):
         """BuilderConfig for PubMedSummarization.
         Args:
           **kwargs: keyword arguments forwarded to super.
         """
-        super(ReformPubMedSummarizationConfig, self).__init__(**kwargs)
+        super(PubMedLaySummarizationConfig, self).__init__(**kwargs)
 
-class ReformPubMedSummarizationDataset(datasets.GeneratorBasedBuilder):
+class PubMedLaySummarizationDataset(datasets.GeneratorBasedBuilder):
     """PubMedSummarization Dataset."""
     
     BUILDER_CONFIGS = [
-        ReformPubMedSummarizationConfig(
-            name="reform_pubmed",
+        PubMedLaySummarizationConfig(
+            name="pubmed_lay",
             version=datasets.Version("1.0.0"),
             description="Reformulated PubMed dataset for summarization",
         ),
@@ -72,7 +72,7 @@ class ReformPubMedSummarizationDataset(datasets.GeneratorBasedBuilder):
 
     
     def _generate_examples(self, data_path, abstract_path):
-        """Generate ReformPubMedSummarization examples."""
+        """Generate PubMedLaySummarization examples."""
         filenames = sorted(os.listdir(data_path))
 
         guid = 0
