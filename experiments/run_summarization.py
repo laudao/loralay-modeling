@@ -354,7 +354,7 @@ def main():
     data_args.dataset_name = data_args.dataset_name.lower()
     assert (
         data_args.dataset_name in DATASET2FILE
-    ), f'`model_type` must be selected in the list {", ".join(DATASET2FILE.keys())}'
+    ), f'`dataset_name` must be selected in the list {", ".join(DATASET2FILE.keys())}'
 
 
     raw_datasets = load_dataset(
@@ -697,12 +697,17 @@ def main():
         predict_dataset = raw_datasets["test"]
         if data_args.max_predict_samples is not None:
             # predict_dataset = predict_dataset.select(range(data_args.max_predict_samples))
+            if data_args.start_idx_predict_samples + data_args.max_predict_samples < len(predict_dataset):
+                end_idx_predict_samples = data_args.start_idx_predict_samples + data_args.max_predict_samples
+            else:
+                end_idx_predict_samples = len(predict_dataset)
             predict_dataset = predict_dataset.select(
                 range(
                     data_args.start_idx_predict_samples, 
-                    data_args.start_idx_predict_samples + data_args.max_predict_samples
+                    end_idx_predict_samples
                 )
             )
+            print(len(predict_dataset))
         with training_args.main_process_first(desc="prediction dataset map pre-processing"):
             predict_dataset = predict_dataset.map(
                 preprocess_function,
@@ -713,6 +718,7 @@ def main():
                 cache_file_name=data_args.test_processed_cache_file_name,
                 desc="Running tokenizer on prediction dataset",
             )
+        print(len(predict_dataset))
 
 
     if data_args.dataset_name == "hal":
