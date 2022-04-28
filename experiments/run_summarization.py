@@ -280,6 +280,15 @@ class DataTrainingArguments:
         }
     )
 
+    length_penalty: Optional[float] = field(
+        default=None,
+        metadata={
+            "help": "Exponential penalty to the length. 1.0 means no penalty. "
+                    "Set to values < 1.0 in order to encourage the model to generate shorter sequences, "
+                    "to a value > 1.0 in order to encourage the model to produce longer sequences."
+        }
+    )
+
     def __post_init__(self):
         if self.data_dir is None:
             raise ValueError("Need a data path.")
@@ -520,6 +529,8 @@ def main():
     model.resize_token_embeddings(len(tokenizer))
     
     model.config.early_stopping = True
+    if data_args.length_penalty is not None:
+        model.config.length_penalty = data_args.length_penalty
 
     if model.config.decoder_start_token_id is None and isinstance(tokenizer, (MBartTokenizer, MBartTokenizerFast)):
         if isinstance(tokenizer, MBartTokenizer):
