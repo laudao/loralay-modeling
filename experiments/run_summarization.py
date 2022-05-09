@@ -15,6 +15,9 @@ from filelock import FileLock
 from transformers import (
     PegasusConfig,
     BigBirdPegasusConfig, 
+    MBartConfig,
+    T5Config,
+    MT5Config,
     AutoTokenizer,
     MBartTokenizer,
     MBartTokenizerFast,
@@ -22,8 +25,9 @@ from transformers import (
     MBart50TokenizerFast,
     PegasusForConditionalGeneration,
     BigBirdPegasusForConditionalGeneration,
-    MBartConfig,
     MBartForConditionalGeneration,
+    T5ForConditionalGeneration,
+    MT5ForConditionalGeneration,
     DataCollatorForSeq2Seq,
     HfArgumentParser,
     set_seed,
@@ -79,6 +83,8 @@ MODEL_CLASSES = {
     "layout_mbart": (LayoutMBartConfig, LayoutMBartForConditionalGeneration),
     "bigbird_mbart": (BigBirdPegasusConfig, BigBirdPegasusForConditionalGeneration),
     "layout_bigbird_mbart": (LayoutBigBirdPegasusConfig, LayoutBigBirdPegasusForConditionalGeneration),
+    "t5": (T5Config, T5ForConditionalGeneration),
+    "mt5": (MT5Config, MT5ForConditionalGeneration)
 }
 
 DATASET2FILE = {
@@ -392,6 +398,8 @@ def main():
         config.max_length = data_args.max_target_length
     elif model_args.model_type == "mbart":
         config.max_length = data_args.max_target_length
+    elif model_args.model_type in ["t5", "mt5"]:
+        config.n_positions = 1024
 
     tokenizer = AutoTokenizer.from_pretrained(
         model_args.tokenizer_name if model_args.tokenizer_name else model_args.model_name_or_path,
