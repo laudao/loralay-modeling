@@ -97,6 +97,8 @@ DATASET2FILE = {
 }
 
 DATASET_TO_LID = {
+    "arxiv_lay": "en_XX",
+    "pubmed_lay": "en_XX",
     "hal": "fr_XX",
     "scielo_es": "es_XX",
     "scielo_pt": "pt_XX",
