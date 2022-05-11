@@ -74,7 +74,7 @@ class LEDHeterformerSelfAttention(nn.Module):
         hidden_states,
         attention_mask=None,
         entity_mask = None,
-        head_mask=None,
+        layer_head_mask=None,
         encoder_hidden_states=None,
         encoder_attention_mask=None,
         output_attentions=False,
