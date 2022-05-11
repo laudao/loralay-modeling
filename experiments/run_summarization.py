@@ -417,6 +417,7 @@ def main():
         use_fast=model_args.use_fast_tokenizer,
         revision=model_args.model_revision,
         use_auth_token=True if model_args.use_auth_token else None,
+        add_prefix_space=True if model_args.model_type == "led_hetformer" else None,
     )
 
     if "layout" in model_args.model_type:
