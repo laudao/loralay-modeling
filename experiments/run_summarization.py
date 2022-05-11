@@ -26,7 +26,8 @@ from transformers import (
     BigBirdPegasusForConditionalGeneration,
     MBartForConditionalGeneration,
     T5ForConditionalGeneration,
-    LongformerModel,
+    LEDConfig,
+    LEDForConditionalGeneration,
     DataCollatorForSeq2Seq,
     HfArgumentParser,
     set_seed,
@@ -56,10 +57,6 @@ from loralay.modeling.layout_bigbird_pegasus import (
     LayoutBigBirdPegasusConfig,
     LayoutBigBirdPegasusForConditionalGeneration
 )
-from loralay.modeling.led_hetformer import (
-    LEDHeterformerConfig,
-    LEDHeterformerForConditionalGeneration
-)
 
 require_version("datasets>=1.8.0", "To fix: pip install -r examples/pytorch/summarization/requirements.txt")
 
@@ -87,7 +84,7 @@ MODEL_CLASSES = {
     "bigbird_mbart": (BigBirdPegasusConfig, BigBirdPegasusForConditionalGeneration),
     "layout_bigbird_mbart": (LayoutBigBirdPegasusConfig, LayoutBigBirdPegasusForConditionalGeneration),
     "t5": (T5Config, T5ForConditionalGeneration),
-    "led_hetformer": (LEDHeterformerConfig, LEDHeterformerForConditionalGeneration),
+    "led": (LEDConfig, LEDForConditionalGeneration),
 }
 
 DATASET2FILE = {
@@ -402,7 +399,7 @@ def main():
     if model_args.model_type in [
         "bigbird_mbart",
         "layout_bigbird_mbart",
-        "led_hetformer"
+        "led"
     ]:
         config.max_position_embeddings = 4096 
         config.max_length = data_args.max_target_length
@@ -417,7 +414,7 @@ def main():
         use_fast=model_args.use_fast_tokenizer,
         revision=model_args.model_revision,
         use_auth_token=True if model_args.use_auth_token else None,
-        add_prefix_space=True if model_args.model_type == "led_hetformer" else None,
+        add_prefix_space=True if model_args.model_type == "led" else None,
     )
 
     if "layout" in model_args.model_type:
@@ -525,16 +522,8 @@ def main():
                 revision=model_args.model_revision,
                 use_auth_token=True if model_args.use_auth_token else None,
             )
-        elif "mbart" in model_args.model_type:
-            source_model = MBartForConditionalGeneration.from_pretrained(
-                model_args.model_name_or_path,
-                from_tf=bool(".ckpt" in model_args.model_name_or_path),
-                cache_dir=model_args.cache_dir,
-                revision=model_args.model_revision,
-                use_auth_token=True if model_args.use_auth_token else None,
-            )
         else:
-            source_model = LongformerModel.from_pretrained(
+            source_model = MBartForConditionalGeneration.from_pretrained(
                 model_args.model_name_or_path,
                 from_tf=bool(".ckpt" in model_args.model_name_or_path),
                 cache_dir=model_args.cache_dir,
