@@ -17,7 +17,6 @@ from transformers import (
     BigBirdPegasusConfig, 
     MBartConfig,
     T5Config,
-    MT5Config,
     AutoTokenizer,
     MBartTokenizer,
     MBartTokenizerFast,
@@ -27,7 +26,7 @@ from transformers import (
     BigBirdPegasusForConditionalGeneration,
     MBartForConditionalGeneration,
     T5ForConditionalGeneration,
-    MT5ForConditionalGeneration,
+    LongformerModel,
     DataCollatorForSeq2Seq,
     HfArgumentParser,
     set_seed,
@@ -57,6 +56,10 @@ from loralay.modeling.layout_bigbird_pegasus import (
     LayoutBigBirdPegasusConfig,
     LayoutBigBirdPegasusForConditionalGeneration
 )
+from loralay.modeling.led_hetformer import (
+    LEDHeterformerConfig,
+    LEDHeterformerForConditionalGeneration
+)
 
 require_version("datasets>=1.8.0", "To fix: pip install -r examples/pytorch/summarization/requirements.txt")
 
@@ -84,7 +87,7 @@ MODEL_CLASSES = {
     "bigbird_mbart": (BigBirdPegasusConfig, BigBirdPegasusForConditionalGeneration),
     "layout_bigbird_mbart": (LayoutBigBirdPegasusConfig, LayoutBigBirdPegasusForConditionalGeneration),
     "t5": (T5Config, T5ForConditionalGeneration),
-    "mt5": (MT5Config, MT5ForConditionalGeneration)
+    "led_hetformer": (LEDHeterformerConfig, LEDHeterformerForConditionalGeneration),
 }
 
 DATASET2FILE = {
@@ -398,7 +401,7 @@ def main():
     if model_args.model_type == "bigbird_mbart" or model_args.model_type == "layout_bigbird_mbart":
         config.max_position_embeddings = 4096 
         config.max_length = data_args.max_target_length
-    elif model_args.model_type == "mbart":
+    elif model_args.model_type == "mbart" or model_args.model_type == "hetformer":
         config.max_length = data_args.max_target_length
     elif model_args.model_type in ["t5", "mt5"]:
         config.n_positions = 1024
@@ -499,12 +502,65 @@ def main():
         return bigbird_model
 
 
+    def load_weights_into_led():
+        led_model = model_class(config=config)
+
+        with torch.no_grad():
+            led_model.led.shared.load_state_dict(
+                source_model.embeddings.word_embeddings.state_dict()
+            )
+            led_model.led.encoder.embed_positions.weight.copy_(
+                source_model.embeddings.position_embeddings.weight[2:]
+            )
+            led_model.led.encoder.layernorm_embedding.load_state_dict(
+                source_model.embeddings.LayerNorm.state_dict()
+            )
+
+            for i in range(config.encoder_layers):
+                led_model.led.encoder.layers[i].self_attn.longformer_self_attn.query.load_state_dict(
+                    source_model.encoder.layer[i].attention.self.query.state_dict()
+                )
+                led_model.led.encoder.layers[i].self_attn.longformer_self_attn.key.load_state_dict(
+                    source_model.encoder.layer[i].attention.self.key.state_dict()
+                )
+                led_model.led.encoder.layers[i].self_attn.longformer_self_attn.value.load_state_dict(
+                    source_model.encoder.layer[i].attention.self.value.state_dict()
+                )
+                led_model.led.encoder.layers[i].self_attn.longformer_self_attn.query_global.load_state_dict(
+                    source_model.encoder.layer[i].attention.self.query_global.state_dict()
+                )
+                led_model.led.encoder.layers[i].self_attn.longformer_self_attn.key_global.load_state_dict(
+                    source_model.encoder.layer[i].attention.self.key_global.state_dict()
+                )
+                led_model.led.encoder.layers[i].self_attn.longformer_self_attn.value_global.load_state_dict(
+                    source_model.encoder.layer[i].attention.self.value_global.state_dict()
+                )
+                
+                led_model.led.encoder.layers[i].self_attn.output.load_state_dict(
+                    source_model.encoder.layer[i].attention.output.dense.state_dict()
+                )
+                led_model.led.encoder.layers[i].self_attn_layer_norm.load_state_dict(
+                    source_model.encoder.layer[i].attention.output.LayerNorm.state_dict()
+                )
+                led_model.led.encoder.layers[i].fc1.load_state_dict(
+                    source_model.encoder.layer[i].intermediate.dense.state_dict()
+                )
+                led_model.led.encoder.layers[i].fc2.load_state_dict(
+                    source_model.encoder.layer[i].output.dense.state_dict()
+                )
+                led_model.led.encoder.layers[i].final_layer_norm.load_state_dict(
+                    source_model.encoder.layer[i].output.LayerNorm.state_dict()
+                )
+
+        return led_model
+
     if (
         model_args.model_type in [
             "bigbird_pegasus", 
             "layout_bigbird_pegasus",
             "bigbird_mbart",
             "layout_bigbird_mbart",
+            "led_hetformer",
         ]
         and training_args.do_train
     ): # BigBird model
@@ -516,7 +572,7 @@ def main():
                 revision=model_args.model_revision,
                 use_auth_token=True if model_args.use_auth_token else None,
             )
-        else:
+        elif "mbart" in model_args.model_type:
             source_model = MBartForConditionalGeneration.from_pretrained(
                 model_args.model_name_or_path,
                 from_tf=bool(".ckpt" in model_args.model_name_or_path),
@@ -524,7 +580,18 @@ def main():
                 revision=model_args.model_revision,
                 use_auth_token=True if model_args.use_auth_token else None,
             )
-        model = load_weights_into_bigbird()
+        else:
+            source_model = LongformerModel.from_pretrained(
+                model_args.model_name_or_path,
+                from_tf=bool(".ckpt" in model_args.model_name_or_path),
+                cache_dir=model_args.cache_dir,
+                revision=model_args.model_revision,
+                use_auth_token=True if model_args.use_auth_token else None,
+            )
+        if model_args.model_type != "led_hetformer":
+            model = load_weights_into_bigbird()
+        else:
+            model = load_weights_into_led()
         del source_model 
         torch.cuda.empty_cache()
     else:
