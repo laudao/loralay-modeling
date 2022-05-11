@@ -392,16 +392,20 @@ def main():
 
     config_class, model_class = MODEL_CLASSES[model_args.model_type]
 
-    config = config_class.from_pretrained(
-        model_args.config_name if model_args.config_name else model_args.model_name_or_path,
-        cache_dir=model_args.cache_dir,
-        revision=model_args.model_revision,
-        use_auth_token=True if model_args.use_auth_token else None,
-    )
+    if model_args.model_type != "led_hetformer":
+        config = config_class.from_pretrained(
+            model_args.config_name if model_args.config_name else model_args.model_name_or_path,
+            cache_dir=model_args.cache_dir,
+            revision=model_args.model_revision,
+            use_auth_token=True if model_args.use_auth_token else None,
+        )
+    else:
+        config = config_class()
+
     if model_args.model_type == "bigbird_mbart" or model_args.model_type == "layout_bigbird_mbart":
         config.max_position_embeddings = 4096 
         config.max_length = data_args.max_target_length
-    elif model_args.model_type == "mbart" or model_args.model_type == "hetformer":
+    elif model_args.model_type == "mbart" or model_args.model_type == "led_hetformer":
         config.max_length = data_args.max_target_length
     elif model_args.model_type in ["t5", "mt5"]:
         config.n_positions = 1024
