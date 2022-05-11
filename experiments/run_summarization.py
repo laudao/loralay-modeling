@@ -408,7 +408,7 @@ def main():
         config.max_length = data_args.max_target_length
     elif model_args.model_type == "mbart":
         config.max_length = data_args.max_target_length
-    elif model_args.model_type in ["t5", "mt5"]:
+    elif model_args.model_type == "t5":
         config.n_positions = 1024
 
     tokenizer = AutoTokenizer.from_pretrained(
@@ -548,6 +548,7 @@ def main():
     else:
         model = model_class.from_pretrained(
             model_args.model_name_or_path,
+            config=config,
             from_tf=bool(".ckpt" in model_args.model_name_or_path),
             cache_dir=model_args.cache_dir,
             revision=model_args.model_revision,
