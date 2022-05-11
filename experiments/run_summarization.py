@@ -392,20 +392,21 @@ def main():
 
     config_class, model_class = MODEL_CLASSES[model_args.model_type]
 
-    if model_args.model_type != "led_hetformer":
-        config = config_class.from_pretrained(
-            model_args.config_name if model_args.config_name else model_args.model_name_or_path,
-            cache_dir=model_args.cache_dir,
-            revision=model_args.model_revision,
-            use_auth_token=True if model_args.use_auth_token else None,
-        )
-    else:
-        config = config_class()
+    config = config_class.from_pretrained(
+        model_args.config_name if model_args.config_name else model_args.model_name_or_path,
+        cache_dir=model_args.cache_dir,
+        revision=model_args.model_revision,
+        use_auth_token=True if model_args.use_auth_token else None,
+    )
 
-    if model_args.model_type == "bigbird_mbart" or model_args.model_type == "layout_bigbird_mbart":
+    if model_args.model_type in [
+        "bigbird_mbart",
+        "layout_bigbird_mbart",
+        "led_hetformer"
+    ]:
         config.max_position_embeddings = 4096 
         config.max_length = data_args.max_target_length
-    elif model_args.model_type == "mbart" or model_args.model_type == "led_hetformer":
+    elif model_args.model_type == "mbart":
         config.max_length = data_args.max_target_length
     elif model_args.model_type in ["t5", "mt5"]:
         config.n_positions = 1024
@@ -506,65 +507,12 @@ def main():
         return bigbird_model
 
 
-    def load_weights_into_led():
-        led_model = model_class(config=config)
-
-        with torch.no_grad():
-            led_model.led.shared.load_state_dict(
-                source_model.embeddings.word_embeddings.state_dict()
-            )
-            led_model.led.encoder.embed_positions.weight.copy_(
-                source_model.embeddings.position_embeddings.weight[2:]
-            )
-            led_model.led.encoder.layernorm_embedding.load_state_dict(
-                source_model.embeddings.LayerNorm.state_dict()
-            )
-
-            for i in range(config.encoder_layers):
-                led_model.led.encoder.layers[i].self_attn.longformer_self_attn.query.load_state_dict(
-                    source_model.encoder.layer[i].attention.self.query.state_dict()
-                )
-                led_model.led.encoder.layers[i].self_attn.longformer_self_attn.key.load_state_dict(
-                    source_model.encoder.layer[i].attention.self.key.state_dict()
-                )
-                led_model.led.encoder.layers[i].self_attn.longformer_self_attn.value.load_state_dict(
-                    source_model.encoder.layer[i].attention.self.value.state_dict()
-                )
-                led_model.led.encoder.layers[i].self_attn.longformer_self_attn.query_global.load_state_dict(
-                    source_model.encoder.layer[i].attention.self.query_global.state_dict()
-                )
-                led_model.led.encoder.layers[i].self_attn.longformer_self_attn.key_global.load_state_dict(
-                    source_model.encoder.layer[i].attention.self.key_global.state_dict()
-                )
-                led_model.led.encoder.layers[i].self_attn.longformer_self_attn.value_global.load_state_dict(
-                    source_model.encoder.layer[i].attention.self.value_global.state_dict()
-                )
-                
-                led_model.led.encoder.layers[i].self_attn.output.load_state_dict(
-                    source_model.encoder.layer[i].attention.output.dense.state_dict()
-                )
-                led_model.led.encoder.layers[i].self_attn_layer_norm.load_state_dict(
-                    source_model.encoder.layer[i].attention.output.LayerNorm.state_dict()
-                )
-                led_model.led.encoder.layers[i].fc1.load_state_dict(
-                    source_model.encoder.layer[i].intermediate.dense.state_dict()
-                )
-                led_model.led.encoder.layers[i].fc2.load_state_dict(
-                    source_model.encoder.layer[i].output.dense.state_dict()
-                )
-                led_model.led.encoder.layers[i].final_layer_norm.load_state_dict(
-                    source_model.encoder.layer[i].output.LayerNorm.state_dict()
-                )
-
-        return led_model
-
     if (
         model_args.model_type in [
             "bigbird_pegasus", 
             "layout_bigbird_pegasus",
             "bigbird_mbart",
             "layout_bigbird_mbart",
-            "led_hetformer",
         ]
         and training_args.do_train
     ): # BigBird model
@@ -592,10 +540,9 @@ def main():
                 revision=model_args.model_revision,
                 use_auth_token=True if model_args.use_auth_token else None,
             )
-        if model_args.model_type != "led_hetformer":
-            model = load_weights_into_bigbird()
-        else:
-            model = load_weights_into_led()
+        
+        model = load_weights_into_bigbird()
+        
         del source_model 
         torch.cuda.empty_cache()
     else:
