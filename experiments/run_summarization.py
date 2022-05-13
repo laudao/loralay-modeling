@@ -57,6 +57,10 @@ from loralay.modeling.layout_bigbird_pegasus import (
     LayoutBigBirdPegasusConfig,
     LayoutBigBirdPegasusForConditionalGeneration
 )
+from loralay.modeling.layout_led import (
+    LayoutLEDConfig,
+    LayoutLEDForConditionalGeneration
+)
 
 require_version("datasets>=1.8.0", "To fix: pip install -r examples/pytorch/summarization/requirements.txt")
 
@@ -85,6 +89,7 @@ MODEL_CLASSES = {
     "layout_bigbird_mbart": (LayoutBigBirdPegasusConfig, LayoutBigBirdPegasusForConditionalGeneration),
     "t5": (T5Config, T5ForConditionalGeneration),
     "led": (LEDConfig, LEDForConditionalGeneration),
+    "layout_led": (LayoutLEDConfig, LayoutLEDForConditionalGeneration),
 }
 
 DATASET2FILE = {
@@ -399,7 +404,8 @@ def main():
     if model_args.model_type in [
         "bigbird_mbart",
         "layout_bigbird_mbart",
-        "led"
+        "led",
+        "layout_led"
     ]:
         config.max_position_embeddings = 4096 
         config.max_length = data_args.max_target_length
@@ -414,7 +420,7 @@ def main():
         use_fast=model_args.use_fast_tokenizer,
         revision=model_args.model_revision,
         use_auth_token=True if model_args.use_auth_token else None,
-        add_prefix_space=True if model_args.model_type == "led" else None,
+        add_prefix_space=True if model_args.model_type in ["led", "layout_led"] else None,
     )
 
     if "layout" in model_args.model_type:
