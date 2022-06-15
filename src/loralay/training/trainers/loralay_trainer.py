@@ -8,7 +8,7 @@ from transformers.optimization import (
 from transformers.trainer_utils import SchedulerType
 
 
-class LLASummarizationTrainer(Seq2SeqTrainer):
+class LoRaLayTrainer(Seq2SeqTrainer):
     def create_scheduler(
         self, 
         num_training_steps: int, 
