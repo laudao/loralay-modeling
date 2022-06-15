@@ -37,7 +37,7 @@ from transformers.trainer_utils import get_last_checkpoint
 from transformers.utils import check_min_version
 from transformers.utils.versions import require_version
 
-from loralay.training.trainers import LLASummarizationTrainer
+from loralay.training.trainers import LoRaLayTrainer
 from loralay.training.training_args_loralay import LoRaLaySummarizationTrainingArguments
 
 import loralay.data.datasets.pubmed_lay
@@ -811,7 +811,7 @@ def main():
         return result
 
     # Initialize our Trainer
-    trainer = LLASummarizationTrainer(
+    trainer = LoRaLayTrainer(
         model=model,
         args=training_args,
         train_dataset=train_dataset if training_args.do_train else None,
