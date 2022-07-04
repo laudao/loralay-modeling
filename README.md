@@ -38,7 +38,7 @@ python experiments/run_summarization.py \
     --gradient_checkpointing 
 ~~~
 
-## Fine-tuning
+## Evaluation
 
 To evaluate your model, run the following:
 
