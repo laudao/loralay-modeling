@@ -30,6 +30,8 @@ python experiments/run_summarization.py \
     --max_source_length <1024|3072|4096> \
     --max_target_length 256 \
     --pad_to_max_length \
+    --max_steps <50000|74000|100000> \
+    --warmup_steps <5000|10000> \
     --learning_rate 1e-4 \
     --adafactor \
     --lr_scheduler_type polynomial \
